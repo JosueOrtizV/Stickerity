@@ -1,0 +1,83 @@
+{
+  "header": {
+    "title": "Stickerity",
+    "subtitle": "Extract stickers from any link and send them straight to WhatsApp"
+  },
+  "search": {
+    "placeholder": "Paste any link containing content or images here...",
+    "button": "Get Stickers",
+    "loading": "Extracting..."
+  },
+  "loadingState": {
+    "title": "Analyzing link and processing media resources...",
+    "subtext": "This may take 5 to 15 seconds depending on the source."
+  },
+  "errors": {
+    "invalid_url": "Please enter a valid URL (http:// or https://)",
+    "no_stickers_found": "No compatible stickers or images were found at the provided link.",
+    "extraction_failed": "Could not extract stickers from the provided link.",
+    "server_error": "Server connection error.",
+    "process_sticker_failed": "Error processing sticker"
+  },
+  "grid": {
+    "downloadButton": "Download",
+    "stickerAlt": "Sticker {{index}}"
+  },
+  "downloadModal": {
+    "title": "Download Sticker",
+    "processingGif": "Processing GIF...",
+    "downloadGif": "Download GIF",
+    "processingWebp": "Processing WebP...",
+    "downloadWebp": "Download WebP",
+    "gifNote": "To keep the animation when creating it in WhatsApp, download it as a",
+    "tabWhatsapp": "Via WhatsApp",
+    "tabOtherApps": "Via Other Apps",
+    "whatsappInstructions": {
+      "title": "Instructions for WhatsApp:",
+      "animatedStep1": "Download the sticker as a <1>GIF</1>.",
+      "animatedStep2": "Open WhatsApp and go to any chat.",
+      "animatedStep3": "Go to the stickers section and tap <1>Create sticker</1>.",
+      "animatedStep4": "Select the downloaded GIF file and save it.",
+      "staticStep1": "Download the sticker as a <1>WebP</1>.",
+      "staticStep2": "Open WhatsApp and go to any chat.",
+      "staticStep3": "Go to the stickers section and tap <1>Create sticker</1>.",
+      "staticStep4": "Select the downloaded WebP file and save it."
+    },
+    "otherAppsInstructions": {
+      "title": "Use Sticker Maker or Sticker.ly:",
+      "animatedStep1": "Download the sticker as a <1>GIF</1> or <1>WebP</1>.",
+      "animatedStep2": "Install an app like <1>Sticker Maker</1> or <1>Sticker.ly</1>.",
+      "animatedStep3": "Open the app, create a sticker pack and select the downloaded file.",
+      "animatedStep4": "Tap <1>Add to WhatsApp</1> to have it ready on your keyboard.",
+      "staticStep1": "Download the sticker as a <1>WebP</1>.",
+      "staticStep2": "Install an app like <1>Sticker Maker</1> or <1>Sticker.ly</1>.",
+      "staticStep3": "Open the app, create a sticker pack and select the downloaded file.",
+      "staticStep4": "Tap <1>Add to WhatsApp</1> to have it ready on your keyboard."
+    }
+  },
+  "legalModal": {
+    "termsTitle": "Terms of Service",
+    "privacyTitle": "Privacy Policy",
+    "terms": {
+      "section1Title": "1. Tool Usage",
+      "section1Text": "Stickerity is an online utility tool designed to process and adapt images from public links into formats compatible with messaging applications (such as WhatsApp).",
+      "section2Title": "2. Disclaimer of Ownership",
+      "section2Text": "Stickerity does not store, host, sell, or claim intellectual property rights over any processed images. The user is solely responsible for acquiring and using content extracted through public links.",
+      "section3Title": "3. Third-party Trademarks",
+      "section3Text": "WhatsApp and other mentioned trademarks belong to their respective owners and are not affiliated with this platform."
+    },
+    "privacy": {
+      "section1Title": "1. Information Collected",
+      "section1Text": "Stickerity does not require registration or store personal user data.",
+      "section2Title": "2. In-transit Processing",
+      "section2Text": "Links entered by the user are temporarily processed in memory to convert image formats and are discarded immediately afterward.",
+      "section3Title": "3. Cookies",
+      "section3Text": "We use basic local storage solely for technical caching and application performance."
+    }
+  },
+  "footer": {
+    "copyright": "© {{year}} Stickerity — Free utility tool",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy"
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "header": {
+    "title": "Stickerity",
+    "subtitle": "Extrae stickers de cualquier enlace y envíalos directo a WhatsApp"
+  },
+  "search": {
+    "placeholder": "Pega cualquier enlace con contenido o imágenes aquí...",
+    "button": "Obtener Stickers",
+    "loading": "Extrayendo..."
+  },
+  "loadingState": {
+    "title": "Analizando el enlace y procesando recursos multimedias...",
+    "subtext": "Esto puede tomar entre 5 a 15 segundos dependiendo del origen."
+  },
+  "errors": {
+    "invalid_url": "Por favor ingresa una URL válida (http:// o https://)",
+    "no_stickers_found": "No se encontraron stickers ni imágenes compatibles en el enlace proporcionado.",
+    "extraction_failed": "No se pudieron extraer stickers del enlace proporcionado.",
+    "server_error": "Error de conexión con el servidor.",
+    "process_sticker_failed": "Error al procesar el sticker"
+  },
+  "grid": {
+    "downloadButton": "Descargar",
+    "stickerAlt": "Sticker {{index}}"
+  },
+  "downloadModal": {
+    "title": "Descargar Sticker",
+    "processingGif": "Procesando GIF...",
+    "downloadGif": "Descargar GIF",
+    "processingWebp": "Procesando WebP...",
+    "downloadWebp": "Descargar WebP",
+    "gifNote": "Para conservar la animación al crearlo en WhatsApp, descárgalo como",
+    "tabWhatsapp": "Vía WhatsApp",
+    "tabOtherApps": "Vía Otras Apps",
+    "whatsappInstructions": {
+      "title": "Instrucciones para WhatsApp:",
+      "animatedStep1": "Descarga el sticker como <1>GIF</1>.",
+      "animatedStep2": "Abre WhatsApp e ingresa a cualquier chat.",
+      "animatedStep3": "Ve a la sección de stickers y presiona <1>Crear sticker</1>.",
+      "animatedStep4": "Selecciona el archivo GIF descargado y guárdalo.",
+      "staticStep1": "Descarga el sticker como <1>WebP</1>.",
+      "staticStep2": "Abre WhatsApp e ingresa a cualquier chat.",
+      "staticStep3": "Ve a la sección de stickers y presiona <1>Crear sticker</1>.",
+      "staticStep4": "Selecciona el archivo WebP descargado y guárdalo."
+    },
+    "otherAppsInstructions": {
+      "title": "Usar Sticker Maker o Sticker.ly:",
+      "animatedStep1": "Descarga el sticker como <1>GIF</1> o <1>WebP</1>.",
+      "animatedStep2": "Instala una aplicación como <1>Sticker Maker</1> o <1>Sticker.ly</1>.",
+      "animatedStep3": "Abre la app, crea un paquete de stickers y selecciona el archivo descargado.",
+      "animatedStep4": "Toca <1>Añadir a WhatsApp</1> para tenerlo listo en tu teclado.",
+      "staticStep1": "Descarga el sticker como <1>WebP</1>.",
+      "staticStep2": "Instala una aplicación como <1>Sticker Maker</1> o <1>Sticker.ly</1>.",
+      "staticStep3": "Abre la app, crea un paquete de stickers y selecciona el archivo descargado.",
+      "staticStep4": "Toca <1>Añadir a WhatsApp</1> para tenerlo listo en tu teclado."
+    }
+  },
+  "legalModal": {
+    "termsTitle": "Términos de Servicio",
+    "privacyTitle": "Política de Privacidad",
+    "terms": {
+      "section1Title": "1. Uso de la herramienta",
+      "section1Text": "Stickerity es una herramienta de utilidad en línea diseñada para procesar y adaptar imágenes de enlaces públicos a formatos compatibles con aplicaciones de mensajería (como WhatsApp).",
+      "section2Title": "2. Exención de responsabilidad de propiedad",
+      "section2Text": "Stickerity no almacena, aloja, vende ni reclama la propiedad intelectual de ninguna de las imágenes procesadas. El usuario es el único responsable de la adquisición y uso que le dé a los contenidos que extrae mediante enlaces públicos.",
+      "section3Title": "3. Marcas de terceros",
+      "section3Text": "WhatsApp y otras marcas mencionadas pertenecen a sus respectivos dueños y no están afiliadas a esta plataforma."
+    },
+    "privacy": {
+      "section1Title": "1. Información recolectada",
+      "section1Text": "Stickerity no requiere registro ni almacena datos personales de los usuarios.",
+      "section2Title": "2. Procesamiento en tránsito",
+      "section2Text": "Los enlaces ingresados por el usuario son procesados temporalmente en memoria para convertir los formatos de imagen y son descartados inmediatamente después.",
+      "section3Title": "3. Cookies",
+      "section3Text": "Utilizamos almacenamiento local básico únicamente para la caché técnica y el rendimiento de la aplicación."
+    }
+  },
+  "footer": {
+    "copyright": "© {{year}} Stickerity — Herramienta de utilidad libre",
+    "terms": "Términos de Servicio",
+    "privacy": "Política de Privacidad"
+  }
+}

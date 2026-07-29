@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import './index.css';
 
 const getApiBaseUrl = () => {
@@ -37,6 +38,8 @@ const SpinnerIcon = () => (
 );
 
 export default function App() {
+  const { t, i18n } = useTranslation();
+
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +47,15 @@ export default function App() {
   const [modalConfig, setModalConfig] = useState<{ url: string, index: number, isAnimated: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'otras'>('whatsapp');
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
+
+  const getErrorMessage = (errKeyOrMsg: string) => {
+    if (!errKeyOrMsg) return t('errors.server_error');
+    const translated = t(`errors.${errKeyOrMsg}`);
+    if (translated !== `errors.${errKeyOrMsg}`) {
+      return translated;
+    }
+    return errKeyOrMsg;
+  };
 
   const handleExtract = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,16 +75,16 @@ export default function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error al extraer los stickers');
+        throw new Error(data.error || t('errors.extraction_failed'));
       }
 
       if (data.stickers && data.stickers.length > 0) {
         setStickers(data.stickers);
       } else {
-        setError('No se encontraron stickers ni imágenes compatibles en el enlace proporcionado.');
+        setError(t('errors.no_stickers_found'));
       }
     } catch (err: any) {
-      setError(err.message || 'Error de conexión con el servidor.');
+      setError(getErrorMessage(err.message));
     } finally {
       setLoading(false);
     }
@@ -109,24 +121,41 @@ export default function App() {
       URL.revokeObjectURL(downloadUrl);
     } catch (err) {
       console.error(err);
-      alert('Error procesando sticker');
+      alert(t('errors.process_sticker_failed'));
     } finally {
       setDownloadingFormat(null);
     }
   };
 
+  const currentLang = i18n.language || 'es';
+
   return (
     <div className="container">
       <header className="header">
-        <h1 className="logo">Stickerity</h1>
-        <p className="subtitle">Extrae stickers de cualquier enlace y envíalos directo a WhatsApp</p>
+        <div className="lang-switcher">
+          <button
+            className={`lang-btn ${currentLang.startsWith('es') ? 'active' : ''}`}
+            onClick={() => i18n.changeLanguage('es')}
+          >
+            ES
+          </button>
+          <button
+            className={`lang-btn ${currentLang.startsWith('en') ? 'active' : ''}`}
+            onClick={() => i18n.changeLanguage('en')}
+          >
+            EN
+          </button>
+        </div>
+
+        <h1 className="logo">{t('header.title')}</h1>
+        <p className="subtitle">{t('header.subtitle')}</p>
       </header>
 
       <form onSubmit={handleExtract} className="search-box">
         <input
           type="url"
           className="search-input"
-          placeholder="Pega cualquier enlace con contenido o imágenes aquí..."
+          placeholder={t('search.placeholder')}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           required
@@ -135,10 +164,10 @@ export default function App() {
           {loading ? (
             <>
               <SpinnerIcon />
-              Extrayendo...
+              {t('search.loading')}
             </>
           ) : (
-            'Obtener Stickers'
+            t('search.button')
           )}
         </button>
       </form>
@@ -148,9 +177,9 @@ export default function App() {
       {loading && (
         <div className="loading-state">
           <div className="spinner"></div>
-          <p>Analizando el enlace y procesando recursos multimedias...</p>
+          <p>{t('loadingState.title')}</p>
           <small style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'block' }}>
-            Esto puede tomar entre 5 a 15 segundos dependiendo del origen.
+            {t('loadingState.subtext')}
           </small>
         </div>
       )}
@@ -162,7 +191,7 @@ export default function App() {
               <div className="sticker-img-wrapper">
                 <img
                   src={getStickerProxyUrl(stickerUrl)}
-                  alt={`Sticker ${index + 1}`}
+                  alt={t('grid.stickerAlt', { index: index + 1 })}
                   className="sticker-img"
                   loading="lazy"
                 />
@@ -173,7 +202,7 @@ export default function App() {
                   className="btn-primary"
                   style={{ padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <DownloadIcon /> Descargar
+                  <DownloadIcon /> {t('grid.downloadButton')}
                 </button>
               </div>
             </div>
@@ -186,7 +215,7 @@ export default function App() {
         <div className="modal-overlay">
           <div className="modal-content">
             <button className="modal-close" onClick={() => setModalConfig(null)}>✕</button>
-            <h2>Descargar Sticker</h2>
+            <h2>{t('downloadModal.title')}</h2>
             
             <div className="modal-actions">
               {modalConfig.isAnimated ? (
@@ -199,11 +228,11 @@ export default function App() {
                   >
                     {downloadingFormat === 'gif' ? (
                       <>
-                        <SpinnerIcon /> Procesando GIF...
+                        <SpinnerIcon /> {t('downloadModal.processingGif')}
                       </>
                     ) : (
                       <>
-                        <DownloadIcon /> Descargar GIF
+                        <DownloadIcon /> {t('downloadModal.downloadGif')}
                       </>
                     )}
                   </button>
@@ -215,11 +244,11 @@ export default function App() {
                   >
                     {downloadingFormat === 'webp' ? (
                       <>
-                        <SpinnerIcon /> Procesando WebP...
+                        <SpinnerIcon /> {t('downloadModal.processingWebp')}
                       </>
                     ) : (
                       <>
-                        <DownloadIcon /> Descargar WebP
+                        <DownloadIcon /> {t('downloadModal.downloadWebp')}
                       </>
                     )}
                   </button>
@@ -233,11 +262,11 @@ export default function App() {
                 >
                   {downloadingFormat === 'webp' ? (
                     <>
-                      <SpinnerIcon /> Procesando WebP...
+                      <SpinnerIcon /> {t('downloadModal.processingWebp')}
                     </>
                   ) : (
                     <>
-                      <DownloadIcon /> Descargar WebP
+                      <DownloadIcon /> {t('downloadModal.downloadWebp')}
                     </>
                   )}
                 </button>
@@ -256,33 +285,33 @@ export default function App() {
                 alignItems: 'center'
               }}>
                 <InfoIcon /> 
-                <span><strong>Nota:</strong> Para conservar la animación al crearlo en WhatsApp, descárgalo como <strong>GIF</strong>.</span>
+                <span>{t('downloadModal.gifNote')} <strong>GIF</strong>.</span>
               </div>
             )}
 
             <div className="modal-tabs">
-              <button className={activeTab === 'whatsapp' ? 'active' : ''} onClick={() => setActiveTab('whatsapp')}>Vía WhatsApp</button>
-              <button className={activeTab === 'otras' ? 'active' : ''} onClick={() => setActiveTab('otras')}>Vía Otras Apps</button>
+              <button className={activeTab === 'whatsapp' ? 'active' : ''} onClick={() => setActiveTab('whatsapp')}>{t('downloadModal.tabWhatsapp')}</button>
+              <button className={activeTab === 'otras' ? 'active' : ''} onClick={() => setActiveTab('otras')}>{t('downloadModal.tabOtherApps')}</button>
             </div>
             
             <div className="modal-instructions">
               {activeTab === 'whatsapp' && (
                 <div>
-                  <p><strong>Instrucciones para WhatsApp:</strong></p>
+                  <p><strong>{t('downloadModal.whatsappInstructions.title')}</strong></p>
                   <ol>
                     {modalConfig.isAnimated ? (
                       <>
-                        <li>Descarga el sticker como <strong>GIF</strong>.</li>
-                        <li>Abre WhatsApp e ingresa a cualquier chat.</li>
-                        <li>Ve a la sección de stickers y presiona <strong>Crear sticker</strong>.</li>
-                        <li>Selecciona el archivo GIF descargado y guárdalo.</li>
+                        <li><Trans i18nKey="downloadModal.whatsappInstructions.animatedStep1">Descarga el sticker como <strong>GIF</strong>.</Trans></li>
+                        <li>{t('downloadModal.whatsappInstructions.animatedStep2')}</li>
+                        <li><Trans i18nKey="downloadModal.whatsappInstructions.animatedStep3">Ve a la sección de stickers y presiona <strong>Crear sticker</strong>.</Trans></li>
+                        <li>{t('downloadModal.whatsappInstructions.animatedStep4')}</li>
                       </>
                     ) : (
                       <>
-                        <li>Descarga el sticker como <strong>WebP</strong>.</li>
-                        <li>Abre WhatsApp e ingresa a cualquier chat.</li>
-                        <li>Ve a la sección de stickers y presiona <strong>Crear sticker</strong>.</li>
-                        <li>Selecciona el archivo WebP descargado y guárdalo.</li>
+                        <li><Trans i18nKey="downloadModal.whatsappInstructions.staticStep1">Descarga el sticker como <strong>WebP</strong>.</Trans></li>
+                        <li>{t('downloadModal.whatsappInstructions.staticStep2')}</li>
+                        <li><Trans i18nKey="downloadModal.whatsappInstructions.staticStep3">Ve a la sección de stickers y presiona <strong>Crear sticker</strong>.</Trans></li>
+                        <li>{t('downloadModal.whatsappInstructions.staticStep4')}</li>
                       </>
                     )}
                   </ol>
@@ -290,21 +319,21 @@ export default function App() {
               )}
               {activeTab === 'otras' && (
                 <div>
-                  <p><strong>Usar Sticker Maker o Sticker.ly:</strong></p>
+                  <p><strong>{t('downloadModal.otherAppsInstructions.title')}</strong></p>
                   <ol>
                     {modalConfig.isAnimated ? (
                       <>
-                        <li>Descarga el sticker como <strong>GIF</strong> o <strong>WebP</strong>.</li>
-                        <li>Instala una aplicación como <strong>Sticker Maker</strong> o <strong>Sticker.ly</strong>.</li>
-                        <li>Abre la app, crea un paquete de stickers y selecciona el archivo descargado.</li>
-                        <li>Toca <strong>Añadir a WhatsApp</strong> para tenerlo listo en tu teclado.</li>
+                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.animatedStep1">Descarga el sticker como <strong>GIF</strong> o <strong>WebP</strong>.</Trans></li>
+                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.animatedStep2">Instala una aplicación como <strong>Sticker Maker</strong> o <strong>Sticker.ly</strong>.</Trans></li>
+                        <li>{t('downloadModal.otherAppsInstructions.animatedStep3')}</li>
+                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.animatedStep4">Toca <strong>Añadir a WhatsApp</strong> para tenerlo listo en tu teclado.</Trans></li>
                       </>
                     ) : (
                       <>
-                        <li>Descarga el sticker como <strong>WebP</strong>.</li>
-                        <li>Instala una aplicación como <strong>Sticker Maker</strong> o <strong>Sticker.ly</strong>.</li>
-                        <li>Abre la app, crea un paquete de stickers y selecciona el archivo descargado.</li>
-                        <li>Toca <strong>Añadir a WhatsApp</strong> para tenerlo listo en tu teclado.</li>
+                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.staticStep1">Descarga el sticker como <strong>WebP</strong>.</Trans></li>
+                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.staticStep2">Instala una aplicación como <strong>Sticker Maker</strong> o <strong>Sticker.ly</strong>.</Trans></li>
+                        <li>{t('downloadModal.otherAppsInstructions.staticStep3')}</li>
+                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.staticStep4">Toca <strong>Añadir a WhatsApp</strong> para tenerlo listo en tu teclado.</Trans></li>
                       </>
                     )}
                   </ol>
@@ -320,25 +349,25 @@ export default function App() {
         <div className="modal-overlay">
           <div className="modal-content">
             <button className="modal-close" onClick={() => setLegalModal(null)}>✕</button>
-            <h2>{legalModal === 'terms' ? 'Términos de Servicio' : 'Política de Privacidad'}</h2>
+            <h2>{legalModal === 'terms' ? t('legalModal.termsTitle') : t('legalModal.privacyTitle')}</h2>
             <div className="legal-text">
               {legalModal === 'terms' ? (
                 <>
-                  <h3>1. Uso de la herramienta</h3>
-                  <p>Stickerity es una herramienta de utilidad en línea diseñada para procesar y adaptar imágenes de enlaces públicos a formatos compatibles con aplicaciones de mensajería (como WhatsApp).</p>
-                  <h3>2. Exención de responsabilidad de propiedad</h3>
-                  <p>Stickerity no almacena, aloja, vende ni reclama la propiedad intelectual de ninguna de las imágenes procesadas. El usuario es el único responsable de la adquisición y uso que le dé a los contenidos que extrae mediante enlaces públicos.</p>
-                  <h3>3. Marcas de terceros</h3>
-                  <p>WhatsApp y otras marcas mencionadas pertenecen a sus respectivos dueños y no están afiliadas a esta plataforma.</p>
+                  <h3>{t('legalModal.terms.section1Title')}</h3>
+                  <p>{t('legalModal.terms.section1Text')}</p>
+                  <h3>{t('legalModal.terms.section2Title')}</h3>
+                  <p>{t('legalModal.terms.section2Text')}</p>
+                  <h3>{t('legalModal.terms.section3Title')}</h3>
+                  <p>{t('legalModal.terms.section3Text')}</p>
                 </>
               ) : (
                 <>
-                  <h3>1. Información recolectada</h3>
-                  <p>Stickerity no requiere registro ni almacena datos personales de los usuarios.</p>
-                  <h3>2. Procesamiento en tránsito</h3>
-                  <p>Los enlaces ingresados por el usuario son procesados temporalmente en memoria para convertir los formatos de imagen y son descartados inmediatamente después.</p>
-                  <h3>3. Cookies</h3>
-                  <p>Utilizamos almacenamiento local básico únicamente para la caché técnica y el rendimiento de la aplicación.</p>
+                  <h3>{t('legalModal.privacy.section1Title')}</h3>
+                  <p>{t('legalModal.privacy.section1Text')}</p>
+                  <h3>{t('legalModal.privacy.section2Title')}</h3>
+                  <p>{t('legalModal.privacy.section2Text')}</p>
+                  <h3>{t('legalModal.privacy.section3Title')}</h3>
+                  <p>{t('legalModal.privacy.section3Text')}</p>
                 </>
               )}
             </div>
@@ -347,10 +376,10 @@ export default function App() {
       )}
 
       <footer className="footer">
-        <p>© {new Date().getFullYear()} Stickerity — Herramienta de utilidad libre</p>
+        <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
         <div className="footer-links">
-          <button className="footer-link" onClick={() => setLegalModal('terms')}>Términos de Servicio</button>
-          <button className="footer-link" onClick={() => setLegalModal('privacy')}>Política de Privacidad</button>
+          <button className="footer-link" onClick={() => setLegalModal('terms')}>{t('footer.terms')}</button>
+          <button className="footer-link" onClick={() => setLegalModal('privacy')}>{t('footer.privacy')}</button>
         </div>
       </footer>
     </div>

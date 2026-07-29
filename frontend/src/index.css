@@ -45,8 +45,46 @@ body {
 }
 
 .header {
+  position: relative;
   text-align: center;
   margin-top: 20px;
+}
+
+.lang-switcher {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 4px;
+}
+
+.lang-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lang-btn.active {
+  background: var(--accent-cyan);
+  color: #000;
+}
+
+@media (max-width: 600px) {
+  .lang-switcher {
+    position: static;
+    margin: 0 auto 12px auto;
+    width: fit-content;
+  }
 }
 
 .logo {

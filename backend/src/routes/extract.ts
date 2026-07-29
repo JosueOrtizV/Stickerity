@@ -18,7 +18,7 @@ export default async function (fastify: FastifyInstance) {
         throw new Error('Invalid protocol');
       }
     } catch (e) {
-      return reply.status(400).send({ error: 'Por favor ingresa una URL válida (http:// o https://)' });
+      return reply.status(400).send({ error: 'invalid_url', message: 'Por favor ingresa una URL válida (http:// o https://)' });
     }
 
     try {
@@ -33,7 +33,7 @@ export default async function (fastify: FastifyInstance) {
       });
     } catch (error) {
       fastify.log.error(error);
-      return reply.status(500).send({ error: 'No se pudieron extraer stickers del enlace proporcionado' });
+      return reply.status(500).send({ error: 'extraction_failed', message: 'No se pudieron extraer stickers del enlace proporcionado' });
     }
   });
 }
