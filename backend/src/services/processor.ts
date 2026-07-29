@@ -16,11 +16,16 @@ export class ImageProcessor {
    * Downloads raw image buffer from URL
    */
   async downloadImage(url: string): Promise<Buffer> {
+    let referer = 'https://www.tiktok.com/';
+    try {
+      referer = new URL(url).origin + '/';
+    } catch (e) {}
+
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-        'Referer': 'https://www.tiktok.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Referer': referer,
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
       }
     });

@@ -1,11 +1,11 @@
 import { FastifyInstance } from 'fastify';
-import { TikTokScraper } from '../services/scraper';
+import { StickerScraper } from '../services/scraper';
 
 interface ExtractRequestBody {
   url: string;
 }
 
-const scraper = new TikTokScraper();
+const scraper = new StickerScraper();
 
 export default async function (fastify: FastifyInstance) {
   fastify.post<{ Body: ExtractRequestBody }>('/extract', async (request, reply) => {
@@ -27,7 +27,7 @@ export default async function (fastify: FastifyInstance) {
       
       return reply.send({
         status: 'success',
-        url_processed: result.tiktok_url,
+        url_processed: result.source_url,
         count: result.stickers.length,
         stickers: result.stickers
       });
