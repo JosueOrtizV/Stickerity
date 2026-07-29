@@ -393,21 +393,14 @@ export class StickerScraper {
 
       // Filter and deduplicate on backend by pathname
       const pathDeduper = new Set<string>();
-      const excludeKeywords = ['icon', 'sprite', 'tracking', 'pixel', 'spacer', 'ad-', 'banner', 'badge', 'avatar', 'favicon', 'logo', 'button'];
+      const excludeKeywords = ['tracking', 'pixel', 'spacer', 'ad-'];
 
       for (const imgUrl of rawUrls) {
         const lower = imgUrl.toLowerCase();
         if (excludeKeywords.some((kw) => lower.includes(kw))) continue;
 
-        try {
-          const parsed = new URL(imgUrl);
-          const pathname = parsed.pathname;
-
-          if (!pathDeduper.has(pathname)) {
-            pathDeduper.add(pathname);
-            result.stickers.push(imgUrl);
-          }
-        } catch (e) {
+        if (!pathDeduper.has(imgUrl)) {
+          pathDeduper.add(imgUrl);
           result.stickers.push(imgUrl);
         }
       }

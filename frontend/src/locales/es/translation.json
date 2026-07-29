@@ -17,11 +17,26 @@
     "no_stickers_found": "No se encontraron stickers ni imágenes compatibles en el enlace proporcionado.",
     "extraction_failed": "No se pudieron extraer stickers del enlace proporcionado.",
     "server_error": "Error de conexión con el servidor.",
-    "process_sticker_failed": "Error al procesar el sticker"
+    "process_sticker_failed": "Error al procesar el sticker",
+    "zip_failed": "Error al generar el paquete ZIP"
   },
   "grid": {
     "downloadButton": "Descargar",
-    "stickerAlt": "Sticker {{index}}"
+    "stickerAlt": "Sticker {{index}}",
+    "selectAll": "Seleccionar todo",
+    "deselectAll": "Deseleccionar todo",
+    "selectedCount": "{{count}} de {{total}} seleccionados",
+    "downloadZip": "Descargar Paquete ZIP ({{count}})"
+  },
+  "zipModal": {
+    "title": "Descargar {{count}} stickers como Paquete ZIP",
+    "formatSubtitle": "Selecciona el formato en el que deseas empaquetar los stickers:",
+    "downloadGifZip": "Descargar Paquete en GIF",
+    "downloadWebpZip": "Descargar Paquete en WebP",
+    "gifNote": "Los stickers animados se convertirán a GIF. Los estáticos siempre se guardarán como WebP.",
+    "webpNote": "Todos los stickers (animados y estáticos) se guardarán como WebP.",
+    "progressTitle": "Creando paquete ZIP...",
+    "progressStatus": "Procesando {{current}} de {{total}} stickers..."
   },
   "downloadModal": {
     "title": "Descargar Sticker",
