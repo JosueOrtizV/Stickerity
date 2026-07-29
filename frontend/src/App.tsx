@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { ThinkingOrb } from 'thinking-orbs';
 import './index.css';
 
 const getApiBaseUrl = () => {
@@ -87,20 +88,80 @@ export default function App() {
         body: JSON.stringify({ url })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
         throw new Error(data.error || t('errors.extraction_failed'));
       }
 
-      if (data.stickers && data.stickers.length > 0) {
-        setStickers(data.stickers);
-        const allSet = new Set<number>();
-        data.stickers.forEach((_: string, i: number) => allSet.add(i));
-        setSelectedIndices(allSet);
-      } else {
+      if (!response.body) {
+        throw new Error(t('errors.server_error'));
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let receivedCount = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          try {
+            const data = JSON.parse(trimmed);
+            if (data.type === 'sticker' && data.sticker) {
+              receivedCount++;
+              const newStickerUrl = data.sticker;
+              setStickers((prev) => {
+                const nextIndex = prev.length;
+                setSelectedIndices((prevSelected) => {
+                  const updated = new Set(prevSelected);
+                  updated.add(nextIndex);
+                  return updated;
+                });
+                return [...prev, newStickerUrl];
+              });
+            } else if (data.type === 'error') {
+              throw new Error(data.error || t('errors.extraction_failed'));
+            }
+          } catch (err: any) {
+            if (err.message && !err.message.includes('Unexpected end of JSON input') && !err.message.includes('JSON at position')) {
+              console.error('Error parsing stream line:', err);
+            }
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.trim());
+          if (data.type === 'sticker' && data.sticker) {
+            receivedCount++;
+            const newStickerUrl = data.sticker;
+            setStickers((prev) => {
+              const nextIndex = prev.length;
+              setSelectedIndices((prevSelected) => {
+                const updated = new Set(prevSelected);
+                updated.add(nextIndex);
+                return updated;
+              });
+              return [...prev, newStickerUrl];
+            });
+          }
+        } catch (e) {}
+      }
+
+      if (receivedCount === 0) {
         setError(t('errors.no_stickers_found'));
       }
+
     } catch (err: any) {
       setError(getErrorMessage(err.message));
     } finally {
@@ -271,7 +332,7 @@ export default function App() {
         <button type="submit" className="btn-extract" disabled={loading}>
           {loading ? (
             <>
-              <SpinnerIcon />
+              <ThinkingOrb state="searching" size={20} theme="dark" />
               {t('search.loading')}
             </>
           ) : (
@@ -282,9 +343,11 @@ export default function App() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      {loading && (
+      {loading && stickers.length === 0 && (
         <div className="loading-state">
-          <div className="spinner"></div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+            <ThinkingOrb state="searching" size={64} theme="dark" />
+          </div>
           <p>{t('loadingState.title')}</p>
           <small style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'block' }}>
             {t('loadingState.subtext')}
@@ -292,7 +355,14 @@ export default function App() {
         </div>
       )}
 
-      {!loading && stickers.length > 0 && (
+      {loading && stickers.length > 0 && (
+        <div className="loading-state" style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+          <ThinkingOrb state="searching" size={20} theme="dark" />
+          <span>{t('loadingState.liveStatus', { count: stickers.length })}</span>
+        </div>
+      )}
+
+      {stickers.length > 0 && (
         <>
           {/* Selection Control Bar */}
           <div className="selection-bar">
@@ -370,7 +440,9 @@ export default function App() {
 
             {zipProgress ? (
               <div className="loading-state" style={{ background: 'none', border: 'none', padding: '20px 0' }}>
-                <div className="spinner"></div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+                  <ThinkingOrb state="working" size={64} theme="dark" />
+                </div>
                 <p>{t('zipModal.progressTitle')}</p>
                 <small style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'block' }}>
                   {t('zipModal.progressStatus', { current: zipProgress.current, total: zipProgress.total })}

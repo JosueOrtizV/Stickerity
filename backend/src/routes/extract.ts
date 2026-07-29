@@ -23,17 +23,37 @@ export default async function (fastify: FastifyInstance) {
 
     try {
       fastify.log.info(`Processing extraction request for URL: ${url}`);
-      const result = await scraper.extractStickers(url);
+
+      // Set headers for NDJSON streaming
+      reply.raw.writeHead(200, {
+        'Content-Type': 'application/x-ndjson',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+
+      const result = await scraper.extractStickers(url, (stickerUrl) => {
+        try {
+          reply.raw.write(JSON.stringify({ type: 'sticker', sticker: stickerUrl }) + '\n');
+        } catch (e) {}
+      });
       
-      return reply.send({
+      reply.raw.write(JSON.stringify({
+        type: 'done',
         status: 'success',
         url_processed: result.source_url,
-        count: result.stickers.length,
-        stickers: result.stickers
-      });
+        count: result.stickers.length
+      }) + '\n');
+
+      reply.raw.end();
     } catch (error) {
       fastify.log.error(error);
-      return reply.status(500).send({ error: 'extraction_failed', message: 'No se pudieron extraer stickers del enlace proporcionado' });
+      if (!reply.raw.headersSent) {
+        return reply.status(500).send({ error: 'extraction_failed', message: 'No se pudieron extraer stickers del enlace proporcionado' });
+      } else {
+        reply.raw.write(JSON.stringify({ type: 'error', error: 'extraction_failed' }) + '\n');
+        reply.raw.end();
+      }
     }
   });
 }

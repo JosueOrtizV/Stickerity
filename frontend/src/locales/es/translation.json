@@ -9,8 +9,9 @@
     "loading": "Extrayendo..."
   },
   "loadingState": {
-    "title": "Analizando el enlace y procesando recursos multimedias...",
-    "subtext": "Esto puede tomar entre 5 a 15 segundos dependiendo del origen."
+    "title": "Analizando el enlace y buscando stickers...",
+    "subtext": "Esto puede tomar hasta 1 minuto dependiendo del origen.",
+    "liveStatus": "Extrayendo en vivo... {{count}} stickers encontrados"
   },
   "errors": {
     "invalid_url": "Por favor ingresa una URL válida (http:// o https://)",

@@ -10,17 +10,23 @@ export interface StickerExtractionResult {
 }
 
 export class StickerScraper {
-  async extractStickers(targetUrl: string): Promise<StickerExtractionResult> {
+  async extractStickers(
+    targetUrl: string,
+    onProgress?: (stickerUrl: string) => void
+  ): Promise<StickerExtractionResult> {
     if (!targetUrl.includes('tiktok.com')) {
-      return this.extractGenericImages(targetUrl);
+      return this.extractGenericImages(targetUrl, onProgress);
     }
-    return this.extractTikTokStickers(targetUrl);
+    return this.extractTikTokStickers(targetUrl, onProgress);
   }
 
   /**
    * TikTok Specialized Comment Sticker Extractor
    */
-  private async extractTikTokStickers(videoUrl: string): Promise<StickerExtractionResult> {
+  private async extractTikTokStickers(
+    videoUrl: string,
+    onProgress?: (stickerUrl: string) => void
+  ): Promise<StickerExtractionResult> {
     const result: StickerExtractionResult = {
       source_url: videoUrl,
       stickers: []
@@ -65,6 +71,9 @@ export class StickerScraper {
             addedHashes.add(uniqueKey);
             result.stickers.push(rawUrl);
             console.log(`[Scraper] Found sticker #${result.stickers.length} (${uniqueKey.substring(0, 8)}...)`);
+            if (onProgress) {
+              try { onProgress(rawUrl); } catch (e) {}
+            }
           }
         };
 
@@ -139,20 +148,39 @@ export class StickerScraper {
         // Click comments
         console.log(`[Scraper] Clicking to load comments...`);
         try {
-          const commentIcon = page.locator('button[data-e2e="browse-comment-icon"], [data-e2e="comment-icon"], [class*="CommentIcon"]').first();
-          const commentsTextTab = page.locator('text="Comments"').or(page.locator('text="Comentarios"')).first();
+          const tryClickComments = async () => {
+            const commentIcon = page.locator('button[data-e2e="browse-comment-icon"], [data-e2e="comment-icon"], [class*="CommentIcon"]').first();
+            const commentsTextTab = page.locator('text="Comments"').or(page.locator('text="Comentarios"')).first();
 
-          if (await commentIcon.isVisible()) {
-            await commentIcon.click({ force: true });
-          } else if (await commentsTextTab.isVisible()) {
-            await commentsTextTab.click({ force: true });
-          }
+            if (await commentIcon.isVisible()) {
+              await commentIcon.click({ force: true }).catch(() => {});
+            } else if (await commentsTextTab.isVisible()) {
+              await commentsTextTab.click({ force: true }).catch(() => {});
+            } else {
+              // TikTok shortcut key 'c' opens/toggles comment panel
+              await page.keyboard.press('c').catch(() => {});
+            }
+          };
+
+          await tryClickComments();
 
           await page.waitForResponse(
             (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
-            { timeout: 10000 }
+            { timeout: 6000 }
           ).catch(() => {});
-          await page.waitForTimeout(1000);
+          await page.waitForTimeout(500);
+
+          // Cold-start fallback: If no comment API was triggered yet, retry clicking
+          if (listPagesLoaded === 0) {
+            console.log(`[Scraper] Cold start delay detected, retrying comment trigger...`);
+            await page.keyboard.press('c').catch(() => {});
+            await tryClickComments();
+            await page.waitForResponse(
+              (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
+              { timeout: 6000 }
+            ).catch(() => {});
+            await page.waitForTimeout(500);
+          }
 
           // PHASE 1: Load ALL comment pages
           console.log(`[Scraper] Phase 1: Loading all comment pages...`);
@@ -317,7 +345,10 @@ export class StickerScraper {
   /**
    * Generic Web Image Extractor
    */
-  private async extractGenericImages(url: string): Promise<StickerExtractionResult> {
+  private async extractGenericImages(
+    url: string,
+    onProgress?: (stickerUrl: string) => void
+  ): Promise<StickerExtractionResult> {
     const result: StickerExtractionResult = {
       source_url: url,
       stickers: []
@@ -402,6 +433,9 @@ export class StickerScraper {
         if (!pathDeduper.has(imgUrl)) {
           pathDeduper.add(imgUrl);
           result.stickers.push(imgUrl);
+          if (onProgress) {
+            try { onProgress(imgUrl); } catch (e) {}
+          }
         }
       }
 
