@@ -22,6 +22,12 @@ export default function TermsPage() {
 
         <h3>{t('legalModal.terms.section3Title')}</h3>
         <p>{t('legalModal.terms.section3Text')}</p>
+
+        <h3>{t('legalModal.terms.section4Title')}</h3>
+        <p>{t('legalModal.terms.section4Text')}</p>
+
+        <h3>{t('legalModal.terms.section5Title')}</h3>
+        <p>{t('legalModal.terms.section5Text')}</p>
       </div>
     </div>
   );

@@ -36,9 +36,11 @@
     "faq1Q": "What sticker formats can I download?",
     "faq1A": "You can download stickers in WebP (static) or GIF (animated), as well as complete ZIP packages.",
     "faq2Q": "Is it free and without registration?",
-    "faq2A": "Yes, Stickerity is 100% free and requires no account creation or extra apps.",
+    "faq2A": "Yes, Stickerity is 100% free and does not require creating an account or installing extra apps.",
     "faq3Q": "How do I add stickers to WhatsApp?",
-    "faq3A": "Simply download them and use the 'Create' option in WhatsApp's stickers section."
+    "faq3A": "Simply download them and use the 'Create' option in the WhatsApp sticker section.",
+    "faq4Q": "Is there a limit to stickers per link?",
+    "faq4A": "We extract as many stickers as possible within a maximum of 1 minute to prevent long waiting times."
   },
   "loadingState": {
     "title": "Analyzing link and searching for stickers...",
@@ -110,17 +112,25 @@
       "section1Title": "1. Tool Usage",
       "section1Text": "Stickerity is an online utility tool designed to process and adapt images from public links into formats compatible with messaging applications (such as WhatsApp).",
       "section2Title": "2. Disclaimer of Ownership",
-      "section2Text": "Stickerity does not store, host, sell, or claim intellectual property rights over any processed images. The user is solely responsible for acquiring and using content extracted through public links.",
-      "section3Title": "3. Third-party Trademarks",
-      "section3Text": "WhatsApp and other mentioned trademarks belong to their respective owners and are not affiliated with this platform."
+      "section2Text": "Stickerity does not store, host, sell, or claim intellectual property ownership of any processed images. The user is solely responsible for acquiring and using content extracted through public links.",
+      "section3Title": "3. Third-Party Trademarks",
+      "section3Text": "WhatsApp and other mentioned trademarks belong to their respective owners and are not affiliated with this platform.",
+      "section4Title": "4. Personal Use & Intellectual Property",
+      "section4Text": "The tool is intended solely for personal, non-commercial use. Users are responsible for respecting the copyright of original content extracted from third-party links.",
+      "section5Title": "5. Limitation of Liability & Availability",
+      "section5Text": "The service is provided 'as is' without guarantees of uninterrupted availability. Stickerity reserves the right to modify, suspend, or restrict access to prevent abuse or malicious automated use."
     },
     "privacy": {
       "section1Title": "1. Information Collected",
-      "section1Text": "Stickerity does not require registration or store personal user data.",
-      "section2Title": "2. In-transit Processing",
+      "section1Text": "Stickerity does not require registration or store personal data of users.",
+      "section2Title": "2. In-Transit Processing",
       "section2Text": "Links entered by the user are temporarily processed in memory to convert image formats and are discarded immediately afterward.",
-      "section3Title": "3. Cookies",
-      "section3Text": "We use basic local storage solely for technical caching and application performance."
+      "section3Title": "3. Cookies & Local Storage",
+      "section3Text": "We use basic local storage solely for technical caching and browser language preferences.",
+      "section4Title": "4. Third-Party Analytics",
+      "section4Text": "We use Google Analytics (via Google Tag Manager) to collect anonymous, aggregated metrics about site traffic and usage to optimize the tool.",
+      "section5Title": "5. Security Logs",
+      "section5Text": "We may temporarily and automatically log basic technical data on our servers solely to prevent cyber attacks and manage rate limits."
     }
   },
   "toast": {

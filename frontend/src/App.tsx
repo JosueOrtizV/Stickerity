@@ -409,7 +409,26 @@ function HomePage() {
               </article>
               <article style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                 <h3 style={{ fontSize: 'var(--text-sm)', margin: '0 0 var(--space-2) 0', color: 'var(--color-ink)' }}>{t('homeSeo.faq3Q')}</h3>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>{t('homeSeo.faq3A')}</p>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>
+                  {t('homeSeo.faq3A')}{' '}
+                  <Link 
+                    to="/help" 
+                    onClick={() => window.scrollTo(0,0)} 
+                    style={{ 
+                      color: 'var(--color-accent)', 
+                      fontWeight: 600, 
+                      textDecoration: 'underline',
+                      display: 'inline-block',
+                      marginLeft: '4px' 
+                    }}
+                  >
+                    {t('header.help')} →
+                  </Link>
+                </p>
+              </article>
+              <article style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', margin: '0 0 var(--space-2) 0', color: 'var(--color-ink)' }}>{t('homeSeo.faq4Q')}</h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>{t('homeSeo.faq4A')}</p>
               </article>
             </div>
           </section>
@@ -589,10 +608,10 @@ export default function App() {
           <div className="footer-content">
             <p className="copyright">{t('footer.copyright', { year: new Date().getFullYear() })}</p>
             <div className="footer-links">
-              <Link to="/about" onClick={() => window.scrollTo(0,0)}>{t('footer.about')}</Link>
-              <Link to="/help" onClick={() => window.scrollTo(0,0)}>{t('header.help')}</Link>
-              <Link to="/terms" onClick={() => window.scrollTo(0,0)}>{t('footer.terms')}</Link>
-              <Link to="/privacy" onClick={() => window.scrollTo(0,0)}>{t('footer.privacy')}</Link>
+              <Link to="/about" className="footer-link" onClick={() => window.scrollTo(0,0)}>{t('footer.about')}</Link>
+              <Link to="/help" className="footer-link" onClick={() => window.scrollTo(0,0)}>{t('header.help')}</Link>
+              <Link to="/terms" className="footer-link" onClick={() => window.scrollTo(0,0)}>{t('footer.terms')}</Link>
+              <Link to="/privacy" className="footer-link" onClick={() => window.scrollTo(0,0)}>{t('footer.privacy')}</Link>
             </div>
           </div>
         </footer>

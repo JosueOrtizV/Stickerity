@@ -22,6 +22,12 @@ export default function PrivacyPage() {
 
         <h3>{t('legalModal.privacy.section3Title')}</h3>
         <p>{t('legalModal.privacy.section3Text')}</p>
+
+        <h3>{t('legalModal.privacy.section4Title')}</h3>
+        <p>{t('legalModal.privacy.section4Text')}</p>
+
+        <h3>{t('legalModal.privacy.section5Title')}</h3>
+        <p>{t('legalModal.privacy.section5Text')}</p>
       </div>
     </div>
   );

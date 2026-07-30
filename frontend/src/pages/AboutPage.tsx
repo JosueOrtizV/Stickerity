@@ -17,26 +17,14 @@ export default function AboutPage() {
       </p>
 
       <div className="legal-text">
-        <h2 style={{ marginTop: 0, color: 'var(--color-ink)' }}>
-          {t('aboutPage.whatIsTitle')}
-        </h2>
-        <p>
-          {t('aboutPage.whatIsText')}
-        </p>
+        <h3>{t('aboutPage.whatIsTitle')}</h3>
+        <p>{t('aboutPage.whatIsText')}</p>
 
-        <h2 style={{ color: 'var(--color-ink)' }}>
-          {t('aboutPage.whyTitle')}
-        </h2>
-        <p>
-          {t('aboutPage.whyText')}
-        </p>
+        <h3>{t('aboutPage.whyTitle')}</h3>
+        <p>{t('aboutPage.whyText')}</p>
 
-        <h2 style={{ color: 'var(--color-ink)' }}>
-          {t('aboutPage.privacyTitle')}
-        </h2>
-        <p>
-          {t('aboutPage.privacyText')}
-        </p>
+        <h3>{t('aboutPage.privacyTitle')}</h3>
+        <p>{t('aboutPage.privacyText')}</p>
       </div>
     </div>
   );
