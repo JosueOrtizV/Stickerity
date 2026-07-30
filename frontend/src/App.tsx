@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { ThinkingOrb } from 'thinking-orbs';
 import './index.css';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
 
 const getApiBaseUrl = () => {
   const hostname = window.location.hostname || 'localhost';
@@ -46,8 +49,8 @@ const CheckIcon = () => (
   </svg>
 );
 
-export default function App() {
-  const { t, i18n } = useTranslation();
+function HomePage() {
+  const { t } = useTranslation();
 
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -60,9 +63,21 @@ export default function App() {
   const [zipProgress, setZipProgress] = useState<{ current: number, total: number } | null>(null);
   
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'otras'>('whatsapp');
-  const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
   const [downloadingFormat, setDownloadingFormat] = useState<'webp' | 'gif' | null>(null);
   const [checkingZipFormat, setCheckingZipFormat] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (!zipProgress) {
+          setZipModalOpen(false);
+        }
+        setModalConfig(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [zipProgress]);
 
   const getErrorMessage = (errKeyOrMsg: string) => {
     if (!errKeyOrMsg) return t('errors.server_error');
@@ -186,7 +201,6 @@ export default function App() {
     e.stopPropagation();
     let isAnimated = rawUrl.toLowerCase().includes('awebp') || rawUrl.toLowerCase().includes('.gif');
     
-    // Quick HEAD request to check actual animated status from backend
     try {
       const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
       const animatedHeader = res.headers.get('X-Sticker-Animated');
@@ -230,7 +244,6 @@ export default function App() {
     }
   };
 
-  // Batch ZIP Generation Handler with Concurrency Control
   const executeZipDownload = async (requestedFormat: 'webp' | 'gif') => {
     const indicesToDownload = Array.from(selectedIndices);
     if (indicesToDownload.length === 0) return;
@@ -314,31 +327,10 @@ export default function App() {
     }
   };
 
-  const currentLang = i18n.language || 'es';
   const selectedCount = selectedIndices.size;
 
   return (
-    <div className="container">
-      <header className="header">
-        <div className="lang-switcher">
-          <button
-            className={`lang-btn ${currentLang.startsWith('es') ? 'active' : ''}`}
-            onClick={() => i18n.changeLanguage('es')}
-          >
-            ES
-          </button>
-          <button
-            className={`lang-btn ${currentLang.startsWith('en') ? 'active' : ''}`}
-            onClick={() => i18n.changeLanguage('en')}
-          >
-            EN
-          </button>
-        </div>
-
-        <h1 className="logo">{t('header.title')}</h1>
-        <p className="subtitle">{t('header.subtitle')}</p>
-      </header>
-
+    <>
       <form onSubmit={handleExtract} className="search-box">
         <input
           type="url"
@@ -383,7 +375,6 @@ export default function App() {
 
       {stickers.length > 0 && (
         <>
-          {/* Selection Control Bar */}
           <div className="selection-bar">
             <div className="selection-controls">
               <button className="btn-text" onClick={handleSelectAll}>
@@ -453,8 +444,13 @@ export default function App() {
 
       {/* Modal Descargar Paquete ZIP */}
       {zipModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div 
+          className="modal-overlay"
+          onClick={() => {
+            if (!zipProgress) setZipModalOpen(false);
+          }}
+        >
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             {!zipProgress && <button className="modal-close" onClick={() => setZipModalOpen(false)}>✕</button>}
             <h2>{t('zipModal.title', { count: selectedCount })}</h2>
 
@@ -511,8 +507,11 @@ export default function App() {
 
       {/* Modal Descargar Sticker Individual */}
       {modalConfig && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div 
+          className="modal-overlay"
+          onClick={() => setModalConfig(null)}
+        >
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setModalConfig(null)}>✕</button>
             <h2>{t('downloadModal.title')}</h2>
             
@@ -642,45 +641,53 @@ export default function App() {
           </div>
         </div>
       )}
+    </>
+  );
+}
 
-      {/* Modal Legal */}
-      {legalModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <button className="modal-close" onClick={() => setLegalModal(null)}>✕</button>
-            <h2>{legalModal === 'terms' ? t('legalModal.termsTitle') : t('legalModal.privacyTitle')}</h2>
-            <div className="legal-text">
-              {legalModal === 'terms' ? (
-                <>
-                  <h3>{t('legalModal.terms.section1Title')}</h3>
-                  <p>{t('legalModal.terms.section1Text')}</p>
-                  <h3>{t('legalModal.terms.section2Title')}</h3>
-                  <p>{t('legalModal.terms.section2Text')}</p>
-                  <h3>{t('legalModal.terms.section3Title')}</h3>
-                  <p>{t('legalModal.terms.section3Text')}</p>
-                </>
-              ) : (
-                <>
-                  <h3>{t('legalModal.privacy.section1Title')}</h3>
-                  <p>{t('legalModal.privacy.section1Text')}</p>
-                  <h3>{t('legalModal.privacy.section2Title')}</h3>
-                  <p>{t('legalModal.privacy.section2Text')}</p>
-                  <h3>{t('legalModal.privacy.section3Title')}</h3>
-                  <p>{t('legalModal.privacy.section3Text')}</p>
-                </>
-              )}
-            </div>
+export default function App() {
+  const { t, i18n } = useTranslation();
+  const currentLang = i18n.language || 'es';
+
+  return (
+    <BrowserRouter>
+      <div className="container">
+        <header className="header">
+          <div className="lang-switcher">
+            <button
+              className={`lang-btn ${currentLang.startsWith('es') ? 'active' : ''}`}
+              onClick={() => i18n.changeLanguage('es')}
+            >
+              ES
+            </button>
+            <button
+              className={`lang-btn ${currentLang.startsWith('en') ? 'active' : ''}`}
+              onClick={() => i18n.changeLanguage('en')}
+            >
+              EN
+            </button>
           </div>
-        </div>
-      )}
 
-      <footer className="footer">
-        <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
-        <div className="footer-links">
-          <button className="footer-link" onClick={() => setLegalModal('terms')}>{t('footer.terms')}</button>
-          <button className="footer-link" onClick={() => setLegalModal('privacy')}>{t('footer.privacy')}</button>
-        </div>
-      </footer>
-    </div>
+          <Link to="/" style={{ textDecoration: 'none' }}>
+            <h1 className="logo">{t('header.title')}</h1>
+          </Link>
+          <p className="subtitle">{t('header.subtitle')}</p>
+        </header>
+
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+        </Routes>
+
+        <footer className="footer">
+          <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
+          <div className="footer-links">
+            <Link to="/terms" className="footer-link">{t('footer.terms')}</Link>
+            <Link to="/privacy" className="footer-link">{t('footer.privacy')}</Link>
+          </div>
+        </footer>
+      </div>
+    </BrowserRouter>
   );
 }
