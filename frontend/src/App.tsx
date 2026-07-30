@@ -12,6 +12,7 @@ import DownloadPopover from './components/DownloadPopover';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import HelpPage from './pages/HelpPage';
+import ScrollToTop from './components/ScrollToTop';
 
 const getApiBaseUrl = () => {
   const hostname = window.location.hostname || 'localhost';
@@ -554,6 +555,7 @@ export default function App() {
           </div>
         </footer>
       </div>
+      <ScrollToTop />
       <Toaster position="top-center" theme={isDark ? 'dark' : 'light'} toastOptions={{ className: 'stickerity-toast' }} />
     </BrowserRouter>
   );

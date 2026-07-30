@@ -43,7 +43,7 @@
     "selectAll": "Seleccionar todo",
     "deselectAll": "Deseleccionar todo",
     "selectedCount": "{{count}} de {{total}} seleccionados",
-    "downloadZip": "Descargar Paquete ZIP ({{count}})"
+    "downloadZip": "ZIP ({{count}})"
   },
   "zipModal": {
     "title": "Descargar {{count}} stickers como Paquete ZIP",
@@ -115,6 +115,7 @@
   "footer": {
     "copyright": "© {{year}} Stickerity — Herramienta de utilidad libre",
     "terms": "Términos de Servicio",
-    "privacy": "Política de Privacidad"
+    "privacy": "Política de Privacidad",
+    "backToTop": "↑ Volver arriba"
   }
 }

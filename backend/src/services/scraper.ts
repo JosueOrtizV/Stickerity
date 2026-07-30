@@ -44,11 +44,11 @@ export class StickerScraper {
     let globalTimeout: NodeJS.Timeout | null = null;
 
     try {
-      // 90-second global safety timeout
+      // 55-second global safety timeout
       const timeoutPromise = new Promise<void>((_, reject) => {
         globalTimeout = setTimeout(() => {
-          reject(new Error('Global extraction timeout (90s) reached'));
-        }, 90000);
+          reject(new Error('Global extraction timeout (55s) reached'));
+        }, 55000);
       });
 
       const extractionPromise = (async () => {
@@ -229,7 +229,7 @@ export class StickerScraper {
           log(`Phase 1: Loading all comment pages...`);
           
           let consecutiveFailures = 0;
-          const maxPages = 50;
+          const maxPages = 20;
           
           while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 5) {
             const prevPages = listPagesLoaded;
@@ -385,7 +385,8 @@ export class StickerScraper {
             
             log(`Reply pass ${pass + 1}: ${replyCount} buttons`);
             
-            for (let j = 0; j < replyCount; j++) {
+            const maxReplies = Math.min(replyCount, 15);
+            for (let j = 0; j < maxReplies; j++) {
               try {
                 const btn = replyButtons.nth(j);
                 if (await btn.isVisible({ timeout: 200 })) {
@@ -403,7 +404,8 @@ export class StickerScraper {
             
             const moreReplies = page.locator('text=/View more|Ver más/i');
             const moreCount = await moreReplies.count();
-            for (let j = 0; j < moreCount; j++) {
+            const maxMore = Math.min(moreCount, 15);
+            for (let j = 0; j < maxMore; j++) {
               try {
                 const btn = moreReplies.nth(j);
                 if (await btn.isVisible({ timeout: 200 })) {
