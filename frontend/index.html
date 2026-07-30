@@ -1,16 +1,117 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-KHTXBCMC');</script>
+    <!-- End Google Tag Manager -->
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Stickerity — Extract stickers from any link and send them to WhatsApp" />
+    <title>Stickerity — Extrae stickers de cualquier enlace para WhatsApp</title>
+    <meta name="description" content="Herramienta web gratuita para extraer stickers e imágenes de cualquier enlace web o red social y descargarlos listos para WhatsApp (WebP, GIF o ZIP)." />
+    <meta name="keywords" content="stickers whatsapp, descargar stickers, convertir imagen a sticker, sticker downloader, stickers animados gif webp, extraer stickers enlace" />
+    <meta name="author" content="Stickerity" />
+    <link rel="canonical" href="https://stickerity.com/" />
+
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://stickerity.com/" />
+    <meta property="og:title" content="Stickerity — Extrae stickers de cualquier enlace para WhatsApp" />
+    <meta property="og:description" content="Pega cualquier enlace, extrae stickers animados o estáticos y descárgalos gratis en formato WebP o GIF para WhatsApp." />
+    <meta property="og:image" content="https://stickerity.com/og-image.png" />
+    <meta property="og:site_name" content="Stickerity" />
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Stickerity — Extrae stickers de cualquier enlace para WhatsApp" />
+    <meta name="twitter:description" content="Pega cualquier enlace, extrae stickers animados o estáticos y descárgalos gratis en formato WebP o GIF para WhatsApp." />
+    <meta name="twitter:image" content="https://stickerity.com/og-image.png" />
+
+    <!-- Hreflang Tags para Segmentación Internacional -->
+    <link rel="alternate" hreflang="es" href="https://stickerity.com/?lng=es" />
+    <link rel="alternate" hreflang="en" href="https://stickerity.com/?lng=en" />
+    <link rel="alternate" hreflang="x-default" href="https://stickerity.com/" />
+
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-    <title>Stickerity</title>
+
+    <!-- Schema.org JSON-LD -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "name": "Stickerity",
+          "url": "https://stickerity.com/",
+          "description": "Herramienta gratuita para extraer stickers e imágenes de cualquier enlace web y descargarlos en formatos compatibles con WhatsApp (WebP, GIF).",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Web",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "featureList": [
+            "Extracción de stickers desde cualquier URL",
+            "Descarga en formato WebP y GIF",
+            "Descarga por lotes en paquete ZIP",
+            "Soporte para stickers animados",
+            "Sin registro ni instalaciones"
+          ],
+          "inLanguage": ["es", "en"]
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "¿Qué formatos de sticker puedo descargar con Stickerity?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Puedes descargar stickers en formato WebP (ideal para WhatsApp) o GIF (para stickers animados). También puedes descargar varios stickers a la vez en un paquete ZIP."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Stickerity funciona con stickers animados?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. Stickerity detecta automáticamente si un sticker es animado y te permite descargarlo como GIF para conservar la animación al importarlo a WhatsApp."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Necesito crear una cuenta o instalar algo?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. Stickerity es una herramienta web 100% gratuita que funciona directamente desde el navegador, sin registro y sin instalaciones."
+              }
+            }
+          ]
+        },
+        {
+          "@type": "Organization",
+          "name": "Stickerity",
+          "url": "https://stickerity.com/",
+          "logo": "https://stickerity.com/favicon.svg"
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KHTXBCMC"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

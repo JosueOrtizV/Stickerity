@@ -12,7 +12,9 @@ import DownloadPopover from './components/DownloadPopover';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import HelpPage from './pages/HelpPage';
+import AboutPage from './pages/AboutPage';
 import ScrollToTop from './components/ScrollToTop';
+import { trackEvent, getDomainFromUrl } from './utils/analytics';
 
 const getApiBaseUrl = () => {
   const hostname = window.location.hostname || 'localhost';
@@ -45,19 +47,6 @@ const SunIcon = () => (
 const MoonIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-  </svg>
-);
-
-const SpinnerIcon = () => (
-  <svg className="spinner-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="2" x2="12" y2="6"/>
-    <line x1="12" y1="18" x2="12" y2="22"/>
-    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
-    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
-    <line x1="2" y1="12" x2="6" y2="12"/>
-    <line x1="18" y1="12" x2="22" y2="12"/>
-    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/>
-    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
   </svg>
 );
 
@@ -132,6 +121,9 @@ function HomePage() {
     e.preventDefault();
     if (!url.trim()) return;
 
+    const domain = getDomainFromUrl(url);
+    trackEvent('extract_start', { url_domain: domain });
+
     setLoading(true);
     setError(null);
     setStickers([]);
@@ -196,11 +188,14 @@ function HomePage() {
 
       if (receivedCount === 0) {
         setError(t('errors.no_stickers_found'));
+        trackEvent('extract_error', { url_domain: domain, error_type: 'no_stickers_found' });
       } else {
         toast.success(t('toast.extractionSuccess', { count: receivedCount }));
+        trackEvent('extract_success', { url_domain: domain, sticker_count: receivedCount });
       }
     } catch (err: any) {
       setError(getErrorMessage(err.message));
+      trackEvent('extract_error', { url_domain: domain, error_type: err.message || 'extraction_failed' });
     } finally {
       setLoading(false);
     }
@@ -257,6 +252,7 @@ function HomePage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(downloadUrl);
       toast.success(t('toast.downloadSuccess'));
+      trackEvent('download_single', { format: actualExt });
     } catch (err) {
       console.error(err);
       alert(t('errors.process_sticker_failed'));
@@ -308,6 +304,7 @@ function HomePage() {
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `Stickerity-Pack-${requestedFormat.toUpperCase()}.zip`);
       toast.success(t('toast.zipSuccess'));
+      trackEvent('download_zip', { format: requestedFormat, count: indicesToDownload.length });
       setSelectedIndices(new Set());
     } catch (err) {
       console.error(err);
@@ -374,9 +371,49 @@ function HomePage() {
       </form>
 
       {!loading && stickers.length === 0 && !error && (
-        <p className="trust-line">
-          {t('search.supportedSources')}
-        </p>
+        <>
+          <p className="trust-line">
+            {t('search.supportedSources')}
+          </p>
+
+          <section className="seo-section" style={{ marginTop: 'var(--space-8)', textAlign: 'left' }}>
+            <h2 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-4)', color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              {t('homeSeo.howItWorksTitle')}
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
+              <div style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-accent)', marginBottom: 'var(--space-2)', marginTop: 0 }}>{t('homeSeo.step1Title')}</h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>{t('homeSeo.step1Desc')}</p>
+              </div>
+              <div style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-teal)', marginBottom: 'var(--space-2)', marginTop: 0 }}>{t('homeSeo.step2Title')}</h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>{t('homeSeo.step2Desc')}</p>
+              </div>
+              <div style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-accent)', marginBottom: 'var(--space-2)', marginTop: 0 }}>{t('homeSeo.step3Title')}</h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>{t('homeSeo.step3Desc')}</p>
+              </div>
+            </div>
+
+            <h2 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-4)', color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              {t('homeSeo.faqTitle')}
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <article style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', margin: '0 0 var(--space-2) 0', color: 'var(--color-ink)' }}>{t('homeSeo.faq1Q')}</h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>{t('homeSeo.faq1A')}</p>
+              </article>
+              <article style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', margin: '0 0 var(--space-2) 0', color: 'var(--color-ink)' }}>{t('homeSeo.faq2Q')}</h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>{t('homeSeo.faq2A')}</p>
+              </article>
+              <article style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', margin: '0 0 var(--space-2) 0', color: 'var(--color-ink)' }}>{t('homeSeo.faq3Q')}</h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-muted)', margin: 0, lineHeight: 1.5 }}>{t('homeSeo.faq3A')}</p>
+              </article>
+            </div>
+          </section>
+        </>
       )}
 
       {error && <div className="error-banner">{error}</div>}
@@ -545,13 +582,18 @@ export default function App() {
           <Route path="/help" element={<HelpPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/about" element={<AboutPage />} />
         </Routes>
 
         <footer className="footer">
-          <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
-          <div className="footer-links">
-            <Link to="/terms" className="footer-link">{t('footer.terms')}</Link>
-            <Link to="/privacy" className="footer-link">{t('footer.privacy')}</Link>
+          <div className="footer-content">
+            <p className="copyright">{t('footer.copyright', { year: new Date().getFullYear() })}</p>
+            <div className="footer-links">
+              <Link to="/about" onClick={() => window.scrollTo(0,0)}>{t('footer.about')}</Link>
+              <Link to="/help" onClick={() => window.scrollTo(0,0)}>{t('header.help')}</Link>
+              <Link to="/terms" onClick={() => window.scrollTo(0,0)}>{t('footer.terms')}</Link>
+              <Link to="/privacy" onClick={() => window.scrollTo(0,0)}>{t('footer.privacy')}</Link>
+            </div>
           </div>
         </footer>
       </div>

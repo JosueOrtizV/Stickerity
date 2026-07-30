@@ -24,6 +24,22 @@
     "loading": "Extrayendo...",
     "supportedSources": "Redes sociales · Páginas web · Y más"
   },
+  "homeSeo": {
+    "howItWorksTitle": "¿Cómo funciona Stickerity?",
+    "step1Title": "1. Pega tu enlace",
+    "step1Desc": "Copia cualquier URL pública con imágenes, GIF o stickers.",
+    "step2Title": "2. Extracción en vivo",
+    "step2Desc": "Stickerity analiza y procesa los stickers automáticamente.",
+    "step3Title": "3. Descarga para WhatsApp",
+    "step3Desc": "Descarga individualmente o en lote como paquete ZIP en WebP/GIF.",
+    "faqTitle": "Preguntas Frecuentes",
+    "faq1Q": "¿Qué formatos de sticker puedo descargar?",
+    "faq1A": "Puedes descargar stickers en WebP (estáticos) o GIF (animados), además de paquetes ZIP completos.",
+    "faq2Q": "¿Es gratis y sin registro?",
+    "faq2A": "Sí, Stickerity es 100% libre y no requiere crear cuenta ni instalar aplicaciones extra.",
+    "faq3Q": "¿Cómo agrego los stickers a WhatsApp?",
+    "faq3A": "Simplemente descárgalos y usa la opción 'Crear' en la sección de stickers de WhatsApp."
+  },
   "loadingState": {
     "title": "Analizando el enlace y buscando stickers...",
     "subtext": "Esto puede tomar hasta 1 minuto dependiendo del origen.",
@@ -116,6 +132,17 @@
     "copyright": "© {{year}} Stickerity — Herramienta de utilidad libre",
     "terms": "Términos de Servicio",
     "privacy": "Política de Privacidad",
+    "about": "Acerca de",
     "backToTop": "↑ Volver arriba"
+  },
+  "aboutPage": {
+    "title": "Acerca de Stickerity",
+    "subtitle": "La forma más fácil de convertir imágenes de la web en stickers para WhatsApp.",
+    "whatIsTitle": "¿Qué es Stickerity?",
+    "whatIsText": "Stickerity es una herramienta web gratuita que extrae stickers e imágenes de cualquier enlace público y los convierte a formatos compatibles con WhatsApp (WebP, GIF). Fue diseñada para simplificar el proceso de llevar el contenido que amas en internet directamente a tus chats.",
+    "whyTitle": "¿Por qué usar Stickerity?",
+    "whyText": "Normalmente, descargar un sticker de la web implica usar varias aplicaciones, buscar formatos compatibles o lidiar con archivos que WhatsApp no reconoce. Stickerity automatiza este proceso: pegas el enlace, nosotros analizamos el contenido, procesamos las imágenes en nuestros servidores temporalmente y te entregamos un archivo WebP o GIF listo para ser importado con la función nativa de 'Crear Sticker' de WhatsApp.",
+    "privacyTitle": "Privacidad por Diseño",
+    "privacyText": "Creemos en herramientas limpias y seguras. Stickerity no requiere registro, no guarda un historial de lo que descargas, no rastrea tu identidad y no almacena las imágenes procesadas en el servidor a largo plazo."
   }
 }

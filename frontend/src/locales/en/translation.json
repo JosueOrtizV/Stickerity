@@ -24,6 +24,22 @@
     "loading": "Extracting...",
     "supportedSources": "Social networks · Web pages · And more"
   },
+  "homeSeo": {
+    "howItWorksTitle": "How Stickerity works",
+    "step1Title": "1. Paste your link",
+    "step1Desc": "Copy any public URL with images, GIFs, or stickers.",
+    "step2Title": "2. Live extraction",
+    "step2Desc": "Stickerity analyzes and processes stickers automatically.",
+    "step3Title": "3. Download for WhatsApp",
+    "step3Desc": "Download individually or in batch as a ZIP package in WebP/GIF.",
+    "faqTitle": "Frequently Asked Questions",
+    "faq1Q": "What sticker formats can I download?",
+    "faq1A": "You can download stickers in WebP (static) or GIF (animated), as well as complete ZIP packages.",
+    "faq2Q": "Is it free and without registration?",
+    "faq2A": "Yes, Stickerity is 100% free and requires no account creation or extra apps.",
+    "faq3Q": "How do I add stickers to WhatsApp?",
+    "faq3A": "Simply download them and use the 'Create' option in WhatsApp's stickers section."
+  },
   "loadingState": {
     "title": "Analyzing link and searching for stickers...",
     "subtext": "This may take up to 1 minute depending on the source.",
@@ -116,6 +132,17 @@
     "copyright": "© {{year}} Stickerity — Free utility tool",
     "terms": "Terms of Service",
     "privacy": "Privacy Policy",
+    "about": "About",
     "backToTop": "↑ Back to top"
+  },
+  "aboutPage": {
+    "title": "About Stickerity",
+    "subtitle": "The easiest way to convert web images into WhatsApp stickers.",
+    "whatIsTitle": "What is Stickerity?",
+    "whatIsText": "Stickerity is a free web tool that extracts stickers and images from any public link and converts them to formats compatible with WhatsApp (WebP, GIF). It was designed to simplify the process of bringing the content you love on the internet directly into your chats.",
+    "whyTitle": "Why use Stickerity?",
+    "whyText": "Normally, downloading a web sticker involves using multiple apps, searching for compatible formats, or dealing with files that WhatsApp won't recognize. Stickerity automates this process: you paste the link, we analyze the content, process the images on our servers temporarily, and deliver a WebP or GIF file ready to be imported using WhatsApp's native 'Create Sticker' feature.",
+    "privacyTitle": "Privacy by Design",
+    "privacyText": "We believe in clean, safe tools. Stickerity requires no registration, does not keep a history of what you download, does not track your identity, and does not store processed images on the server long-term."
   }
 }
