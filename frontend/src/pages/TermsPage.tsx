@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -10,7 +9,7 @@ export default function TermsPage() {
       <div className="legal-header">
         <h1>{t('legalModal.termsTitle')}</h1>
         <Link to="/" className="back-link">
-          ← Volver
+          ← {t('header.title')}
         </Link>
       </div>
 

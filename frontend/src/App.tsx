@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { useTranslation, Trans } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { ThinkingOrb } from 'thinking-orbs';
 import './index.css';
+import StickerCard from './components/StickerCard';
+import FloatingSelectionBar from './components/FloatingSelectionBar';
+import DownloadPopover from './components/DownloadPopover';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
 
@@ -15,23 +18,35 @@ const getApiBaseUrl = () => {
 
 // --- SVG Icons ---
 const DownloadIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
     <polyline points="7 10 12 15 17 10"/>
     <line x1="12" y1="15" x2="12" y2="3"/>
   </svg>
 );
 
-const InfoIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px', verticalAlign: 'middle', flexShrink: 0 }}>
-    <circle cx="12" cy="12" r="10"/>
-    <line x1="12" y1="16" x2="12" y2="12"/>
-    <line x1="12" y1="8" x2="12.01" y2="8"/>
+const SunIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5"/>
+    <line x1="12" y1="1" x2="12" y2="3"/>
+    <line x1="12" y1="21" x2="12" y2="23"/>
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+    <line x1="1" y1="12" x2="3" y2="12"/>
+    <line x1="21" y1="12" x2="23" y2="12"/>
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
   </svg>
 );
 
 const SpinnerIcon = () => (
-  <svg className="spinner-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px', animation: 'spin 1s linear infinite' }}>
+  <svg className="spinner-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="12" y1="2" x2="12" y2="6"/>
     <line x1="12" y1="18" x2="12" y2="22"/>
     <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
@@ -43,11 +58,38 @@ const SpinnerIcon = () => (
   </svg>
 );
 
-const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-);
+// --- Theme Hook ---
+function useTheme() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem('stickerity-theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    return 'system' as unknown as 'light' | 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === ('system' as string)) {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+    localStorage.setItem('stickerity-theme', theme);
+  }, [theme]);
+
+  const toggle = useCallback(() => {
+    setTheme(prev => {
+      const currentlyDark =
+        prev === 'dark' ||
+        (prev === ('system' as string) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      return currentlyDark ? 'light' : 'dark';
+    });
+  }, []);
+
+  const isDark =
+    theme === 'dark' ||
+    (theme === ('system' as string) && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  return { theme, toggle, isDark };
+}
 
 function HomePage() {
   const { t } = useTranslation();
@@ -57,22 +99,19 @@ function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [stickers, setStickers] = useState<string[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
-  
-  const [modalConfig, setModalConfig] = useState<{ url: string, index: number, isAnimated: boolean } | null>(null);
+
   const [zipModalOpen, setZipModalOpen] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ current: number, total: number } | null>(null);
-  
-  const [activeTab, setActiveTab] = useState<'whatsapp' | 'otras'>('whatsapp');
-  const [downloadingFormat, setDownloadingFormat] = useState<'webp' | 'gif' | null>(null);
   const [checkingZipFormat, setCheckingZipFormat] = useState(false);
+
+  // Per-card download state
+  const [cardDownloading, setCardDownloading] = useState<Map<number, 'webp' | 'gif'>>(new Map());
+  const [cardAnimated, setCardAnimated] = useState<Map<number, boolean>>(new Map());
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (!zipProgress) {
-          setZipModalOpen(false);
-        }
-        setModalConfig(null);
+        if (!zipProgress) setZipModalOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -82,9 +121,7 @@ function HomePage() {
   const getErrorMessage = (errKeyOrMsg: string) => {
     if (!errKeyOrMsg) return t('errors.server_error');
     const translated = t(`errors.${errKeyOrMsg}`);
-    if (translated !== `errors.${errKeyOrMsg}`) {
-      return translated;
-    }
+    if (translated !== `errors.${errKeyOrMsg}`) return translated;
     return errKeyOrMsg;
   };
 
@@ -96,6 +133,7 @@ function HomePage() {
     setError(null);
     setStickers([]);
     setSelectedIndices(new Set());
+    setCardAnimated(new Map());
 
     try {
       const response = await fetch(`${getApiBaseUrl()}/extract`, {
@@ -109,9 +147,7 @@ function HomePage() {
         throw new Error(data.error || t('errors.extraction_failed'));
       }
 
-      if (!response.body) {
-        throw new Error(t('errors.server_error'));
-      }
+      if (!response.body) throw new Error(t('errors.server_error'));
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -129,19 +165,17 @@ function HomePage() {
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
-
           try {
             const data = JSON.parse(trimmed);
             if (data.type === 'sticker' && data.sticker) {
               receivedCount++;
-              const newStickerUrl = data.sticker;
-              setStickers((prev) => [...prev, newStickerUrl]);
+              setStickers(prev => [...prev, data.sticker]);
             } else if (data.type === 'error') {
               throw new Error(data.error || t('errors.extraction_failed'));
             }
           } catch (err: any) {
             if (err.message && !err.message.includes('Unexpected end of JSON input') && !err.message.includes('JSON at position')) {
-              console.error('Error parsing stream line:', err);
+              console.error('Stream parse error:', err);
             }
           }
         }
@@ -152,16 +186,12 @@ function HomePage() {
           const data = JSON.parse(buffer.trim());
           if (data.type === 'sticker' && data.sticker) {
             receivedCount++;
-            const newStickerUrl = data.sticker;
-            setStickers((prev) => [...prev, newStickerUrl]);
+            setStickers(prev => [...prev, data.sticker]);
           }
         } catch (e) {}
       }
 
-      if (receivedCount === 0) {
-        setError(t('errors.no_stickers_found'));
-      }
-
+      if (receivedCount === 0) setError(t('errors.no_stickers_found'));
     } catch (err: any) {
       setError(getErrorMessage(err.message));
     } finally {
@@ -169,20 +199,13 @@ function HomePage() {
     }
   };
 
-  const getStickerProxyUrl = (rawUrl: string) => {
-    return `${getApiBaseUrl()}/sticker?url=${encodeURIComponent(rawUrl)}&v=2`;
-  };
+  const getStickerProxyUrl = (rawUrl: string) =>
+    `${getApiBaseUrl()}/sticker?url=${encodeURIComponent(rawUrl)}&v=2`;
 
-  // Selection handlers
-  const toggleSelectSticker = (index: number, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setSelectedIndices((prev) => {
+  const toggleSelectSticker = (index: number) => {
+    setSelectedIndices(prev => {
       const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
-      }
+      next.has(index) ? next.delete(index) : next.add(index);
       return next;
     });
   };
@@ -193,41 +216,41 @@ function HomePage() {
     setSelectedIndices(all);
   };
 
-  const handleDeselectAll = () => {
-    setSelectedIndices(new Set());
-  };
+  const handleDeselectAll = () => setSelectedIndices(new Set());
 
-  const handleDownloadClick = async (rawUrl: string, index: number, e: React.MouseEvent) => {
+  // Per-card download handler
+  const handleCardDownload = async (rawUrl: string, index: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    let isAnimated = rawUrl.toLowerCase().includes('awebp') || rawUrl.toLowerCase().includes('.gif');
-    
-    try {
-      const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
-      const animatedHeader = res.headers.get('X-Sticker-Animated');
-      if (animatedHeader) {
-        isAnimated = animatedHeader === 'true';
+
+    // Check animation status if we haven't yet
+    if (!cardAnimated.has(index)) {
+      let isAnimated = rawUrl.toLowerCase().includes('awebp') || rawUrl.toLowerCase().includes('.gif');
+      try {
+        const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
+        const header = res.headers.get('X-Sticker-Animated');
+        if (header) isAnimated = header === 'true';
+      } catch (err) {
+        console.error('HEAD check failed', err);
       }
-    } catch(err) {
-      console.error('Failed to get animated header', err);
+      setCardAnimated(prev => new Map(prev).set(index, isAnimated));
+
+      // If animated, let the popover handle it — don't auto-download
+      if (isAnimated) return;
     }
 
-    setModalConfig({ url: rawUrl, index, isAnimated });
-    setActiveTab('whatsapp');
+    // For static, or if user already knows format via popover
+    // This path is handled by the popover's onDownload
   };
 
-  const executeAction = async (format: 'webp' | 'gif') => {
-    if (!modalConfig || downloadingFormat) return;
-    setDownloadingFormat(format);
+  const executeCardDownload = async (rawUrl: string, index: number, format: 'webp' | 'gif') => {
+    setCardDownloading(prev => new Map(prev).set(index, format));
     try {
-      const proxyUrl = getStickerProxyUrl(modalConfig.url) + `&format=${format}`;
+      const proxyUrl = getStickerProxyUrl(rawUrl) + `&format=${format}`;
       const res = await fetch(proxyUrl);
-      
       const contentType = res.headers.get('content-type') || '';
       const actualExt = contentType.includes('gif') ? 'gif' : 'webp';
-      
       const blob = await res.blob();
-      const filename = `stickerity-${modalConfig.index + 1}.${actualExt}`;
-      
+      const filename = `stickerity-${index + 1}.${actualExt}`;
       const downloadUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
@@ -240,17 +263,21 @@ function HomePage() {
       console.error(err);
       alert(t('errors.process_sticker_failed'));
     } finally {
-      setDownloadingFormat(null);
+      setCardDownloading(prev => {
+        const next = new Map(prev);
+        next.delete(index);
+        return next;
+      });
     }
   };
 
+  // ZIP download
   const executeZipDownload = async (requestedFormat: 'webp' | 'gif') => {
     const indicesToDownload = Array.from(selectedIndices);
     if (indicesToDownload.length === 0) return;
 
     const zip = new JSZip();
     setZipProgress({ current: 0, total: indicesToDownload.length });
-
     const CONCURRENCY_LIMIT = 3;
     let completed = 0;
 
@@ -265,12 +292,10 @@ function HomePage() {
               const res = await fetch(proxyUrl);
               const contentType = res.headers.get('content-type') || '';
               const actualExt = contentType.includes('gif') ? 'gif' : 'webp';
-              
               const blob = await res.blob();
-              const filename = `stickerity-${idx + 1}.${actualExt}`;
-              zip.file(filename, blob);
+              zip.file(`stickerity-${idx + 1}.${actualExt}`, blob);
             } catch (e) {
-              console.error(`Failed to include sticker #${idx + 1} in zip`, e);
+              console.error(`ZIP: failed sticker #${idx + 1}`, e);
             } finally {
               completed++;
               setZipProgress({ current: completed, total: indicesToDownload.length });
@@ -295,26 +320,22 @@ function HomePage() {
 
   const handleZipButtonClick = async () => {
     if (selectedIndices.size === 0) return;
-
     setCheckingZipFormat(true);
     let hasAnimated = false;
-    
+
     try {
       const selectedUrls = Array.from(selectedIndices).map(idx => stickers[idx]);
-      
-      const checkPromises = selectedUrls.map(async (rawUrl) => {
-        try {
-          const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
-          return res.headers.get('X-Sticker-Animated') === 'true';
-        } catch (e) {
-          return false;
-        }
-      });
-      
-      const results = await Promise.all(checkPromises);
-      hasAnimated = results.some(isAnim => isAnim);
+      const results = await Promise.all(
+        selectedUrls.map(async (rawUrl) => {
+          try {
+            const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
+            return res.headers.get('X-Sticker-Animated') === 'true';
+          } catch { return false; }
+        })
+      );
+      hasAnimated = results.some(Boolean);
     } catch (e) {
-      console.error('Failed to check formats', e);
+      console.error('Format check failed', e);
     } finally {
       setCheckingZipFormat(false);
     }
@@ -352,292 +373,160 @@ function HomePage() {
         </button>
       </form>
 
+      {!loading && stickers.length === 0 && !error && (
+        <p className="trust-line">
+          TikTok · Giphy · Tenor · GIPHY Stickers · y más
+        </p>
+      )}
+
       {error && <div className="error-banner">{error}</div>}
 
+      {/* Skeleton loading state */}
       {loading && stickers.length === 0 && (
         <div className="loading-state">
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-            <ThinkingOrb state="searching" size={64} theme="dark" />
+            <ThinkingOrb state="searching" size={64} />
           </div>
           <p>{t('loadingState.title')}</p>
-          <small style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'block' }}>
-            {t('loadingState.subtext')}
-          </small>
+          <small>{t('loadingState.subtext')}</small>
         </div>
       )}
 
+      {/* Live extraction counter */}
       {loading && stickers.length > 0 && (
-        <div className="loading-state" style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-          <ThinkingOrb state="searching" size={20} theme="dark" />
+        <div className="loading-inline">
+          <ThinkingOrb state="searching" size={20} />
           <span>{t('loadingState.liveStatus', { count: stickers.length })}</span>
         </div>
       )}
 
+      {/* Sticker Grid */}
       {stickers.length > 0 && (
-        <>
-          <div className="selection-bar">
-            <div className="selection-controls">
-              <button className="btn-text" onClick={handleSelectAll}>
-                {t('grid.selectAll')}
-              </button>
-              <button className="btn-text" onClick={handleDeselectAll}>
-                {t('grid.deselectAll')}
-              </button>
-              <span className="selection-count">
-                {t('grid.selectedCount', { count: selectedCount, total: stickers.length })}
-              </span>
-            </div>
+        <section className="grid">
+          {stickers.map((stickerUrl, index) => {
+            const isAnimated = cardAnimated.get(index);
+            const downloadFormat = cardDownloading.get(index) || null;
 
-            <button
-              className="btn-primary"
-              onClick={handleZipButtonClick}
-              disabled={selectedCount === 0 || checkingZipFormat}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                opacity: selectedCount === 0 ? 0.5 : 1,
-                cursor: selectedCount === 0 || checkingZipFormat ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {checkingZipFormat ? <SpinnerIcon /> : <DownloadIcon />}
-              {checkingZipFormat ? t('zipModal.progressTitle') : t('grid.downloadZip', { count: selectedCount })}
-            </button>
-          </div>
-
-          <section className="grid">
-            {stickers.map((stickerUrl, index) => {
-              const isSelected = selectedIndices.has(index);
+            // If we know it's animated, show popover; otherwise show simple button
+            if (isAnimated === true) {
               return (
                 <div
                   key={index}
-                  className={`sticker-card ${isSelected ? 'selected' : ''}`}
+                  className={`sticker-card ${selectedIndices.has(index) ? 'selected' : ''}`}
                   onClick={() => toggleSelectSticker(index)}
+                  style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
                 >
                   <div className="checkbox-badge">
-                    {isSelected && <CheckIcon />}
+                    {selectedIndices.has(index) && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    )}
                   </div>
-
                   <div className="sticker-img-wrapper">
-                    <img
-                      src={getStickerProxyUrl(stickerUrl)}
-                      alt={t('grid.stickerAlt', { index: index + 1 })}
-                      className="sticker-img"
-                      loading="lazy"
-                    />
+                    <img src={getStickerProxyUrl(stickerUrl)} alt={t('grid.stickerAlt', { index: index + 1 })} className="sticker-img" loading="lazy" />
                   </div>
                   <div className="card-actions">
-                    <button
-                      onClick={(e) => handleDownloadClick(stickerUrl, index, e)}
-                      className="btn-secondary"
-                      style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}
-                    >
-                      <DownloadIcon /> {t('grid.downloadButton')}
-                    </button>
+                    <DownloadPopover
+                      isAnimated={true}
+                      onDownload={(format) => executeCardDownload(stickerUrl, index, format)}
+                      downloadingFormat={downloadFormat}
+                      triggerLabel={t('grid.downloadButton')}
+                      gifLabel={t('downloadModal.downloadGif')}
+                      webpLabel={t('downloadModal.downloadWebp')}
+                      processingGifLabel={t('downloadModal.processingGif')}
+                      processingWebpLabel={t('downloadModal.processingWebp')}
+                    />
                   </div>
                 </div>
               );
-            })}
-          </section>
-        </>
+            }
+
+            return (
+              <StickerCard
+                key={index}
+                stickerUrl={stickerUrl}
+                proxyUrl={getStickerProxyUrl(stickerUrl)}
+                index={index}
+                isSelected={selectedIndices.has(index)}
+                onToggleSelect={toggleSelectSticker}
+                onDownloadClick={(rawUrl, idx, e) => {
+                  e.stopPropagation();
+                  // Check if animated first
+                  if (!cardAnimated.has(idx)) {
+                    handleCardDownload(rawUrl, idx, e);
+                    return;
+                  }
+                  // If static, download directly
+                  executeCardDownload(rawUrl, idx, 'webp');
+                }}
+                altText={t('grid.stickerAlt', { index: index + 1 })}
+                downloadLabel={t('grid.downloadButton')}
+                style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
+              />
+            );
+          })}
+        </section>
       )}
 
-      {/* Modal Descargar Paquete ZIP */}
+      {/* HF3: Floating Selection Bar */}
+      {stickers.length > 0 && (
+        <FloatingSelectionBar
+          selectedCount={selectedCount}
+          totalCount={stickers.length}
+          onDeselectAll={handleDeselectAll}
+          onSelectAll={handleSelectAll}
+          onDownloadZip={handleZipButtonClick}
+          isCheckingFormat={checkingZipFormat}
+          selectAllLabel={t('grid.selectAll')}
+          downloadLabel={t('grid.downloadZip', { count: selectedCount })}
+          countLabel={t('grid.selectedCount', { count: selectedCount, total: stickers.length })}
+          processingLabel={t('zipModal.progressTitle')}
+        />
+      )}
+
+      {/* ZIP Format Modal — only shows when animated stickers detected */}
       {zipModalOpen && (
-        <div 
+        <div
           className="modal-overlay"
-          onClick={() => {
-            if (!zipProgress) setZipModalOpen(false);
-          }}
+          onClick={() => { if (!zipProgress) setZipModalOpen(false); }}
         >
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             {!zipProgress && <button className="modal-close" onClick={() => setZipModalOpen(false)}>✕</button>}
             <h2>{t('zipModal.title', { count: selectedCount })}</h2>
 
             {zipProgress ? (
-              <div className="loading-state" style={{ background: 'none', border: 'none', padding: '20px 0' }}>
+              <div style={{ textAlign: 'center' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-                  <ThinkingOrb state="working" size={64} theme="dark" />
+                  <ThinkingOrb state="working" size={64} />
                 </div>
-                <p>{t('zipModal.progressTitle')}</p>
-                <small style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'block' }}>
+                <p style={{ fontFamily: 'var(--font-display)', fontWeight: 500 }}>{t('zipModal.progressTitle')}</p>
+                <small style={{ color: 'var(--color-ink-muted)' }}>
                   {t('zipModal.progressStatus', { current: zipProgress.current, total: zipProgress.total })}
                 </small>
                 <div className="progress-bar-wrapper">
-                  <div
-                    className="progress-bar-fill"
-                    style={{ width: `${(zipProgress.current / zipProgress.total) * 100}%` }}
-                  ></div>
+                  <div className="progress-bar-fill" style={{ width: `${(zipProgress.current / zipProgress.total) * 100}%` }} />
                 </div>
               </div>
             ) : (
               <>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                <p style={{ color: 'var(--color-ink-muted)', fontSize: 'var(--text-sm)' }}>
                   {t('zipModal.formatSubtitle')}
                 </p>
-                
                 <div className="modal-actions">
-                  <button 
-                    onClick={() => executeZipDownload('gif')} 
-                    className="btn-primary" 
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
+                  <button onClick={() => executeZipDownload('gif')} className="btn-primary">
                     <DownloadIcon /> {t('zipModal.downloadGifZip')}
                   </button>
-                  <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '-4px', marginBottom: '8px' }}>
-                    💡 {t('zipModal.gifNote')}
+                  <small style={{ color: 'var(--color-ink-faint)', fontSize: 'var(--text-xs)', textAlign: 'center' }}>
+                    {t('zipModal.gifNote')}
                   </small>
-
-                  <button 
-                    onClick={() => executeZipDownload('webp')} 
-                    className="btn-secondary" 
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
+                  <button onClick={() => executeZipDownload('webp')} className="btn-secondary">
                     <DownloadIcon /> {t('zipModal.downloadWebpZip')}
                   </button>
-                  <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '-4px' }}>
-                    💡 {t('zipModal.webpNote')}
+                  <small style={{ color: 'var(--color-ink-faint)', fontSize: 'var(--text-xs)', textAlign: 'center' }}>
+                    {t('zipModal.webpNote')}
                   </small>
                 </div>
               </>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Modal Descargar Sticker Individual */}
-      {modalConfig && (
-        <div 
-          className="modal-overlay"
-          onClick={() => setModalConfig(null)}
-        >
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setModalConfig(null)}>✕</button>
-            <h2>{t('downloadModal.title')}</h2>
-            
-            <div className="modal-actions">
-              {modalConfig.isAnimated ? (
-                <>
-                  <button 
-                    onClick={() => executeAction('gif')} 
-                    className="btn-primary" 
-                    disabled={downloadingFormat !== null}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {downloadingFormat === 'gif' ? (
-                      <>
-                        <SpinnerIcon /> {t('downloadModal.processingGif')}
-                      </>
-                    ) : (
-                      <>
-                        <DownloadIcon /> {t('downloadModal.downloadGif')}
-                      </>
-                    )}
-                  </button>
-                  <button 
-                    onClick={() => executeAction('webp')} 
-                    className="btn-secondary" 
-                    disabled={downloadingFormat !== null}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {downloadingFormat === 'webp' ? (
-                      <>
-                        <SpinnerIcon /> {t('downloadModal.processingWebp')}
-                      </>
-                    ) : (
-                      <>
-                        <DownloadIcon /> {t('downloadModal.downloadWebp')}
-                      </>
-                    )}
-                  </button>
-                </>
-              ) : (
-                <button 
-                  onClick={() => executeAction('webp')} 
-                  className="btn-primary" 
-                  disabled={downloadingFormat !== null}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  {downloadingFormat === 'webp' ? (
-                    <>
-                      <SpinnerIcon /> {t('downloadModal.processingWebp')}
-                    </>
-                  ) : (
-                    <>
-                      <DownloadIcon /> {t('downloadModal.downloadWebp')}
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {modalConfig.isAnimated && (
-              <div style={{
-                background: 'rgba(0, 242, 254, 0.1)',
-                border: '1px solid rgba(0, 242, 254, 0.3)',
-                color: 'var(--accent-cyan)',
-                padding: '10px 14px',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.85rem',
-                display: 'flex',
-                alignItems: 'center'
-              }}>
-                <InfoIcon /> 
-                <span>{t('downloadModal.gifNote')} <strong>GIF</strong>.</span>
-              </div>
-            )}
-
-            <div className="modal-tabs">
-              <button className={activeTab === 'whatsapp' ? 'active' : ''} onClick={() => setActiveTab('whatsapp')}>{t('downloadModal.tabWhatsapp')}</button>
-              <button className={activeTab === 'otras' ? 'active' : ''} onClick={() => setActiveTab('otras')}>{t('downloadModal.tabOtherApps')}</button>
-            </div>
-            
-            <div className="modal-instructions">
-              {activeTab === 'whatsapp' && (
-                <div>
-                  <p><strong>{t('downloadModal.whatsappInstructions.title')}</strong></p>
-                  <ol>
-                    {modalConfig.isAnimated ? (
-                      <>
-                        <li><Trans i18nKey="downloadModal.whatsappInstructions.animatedStep1">Descarga el sticker como <strong>GIF</strong>.</Trans></li>
-                        <li>{t('downloadModal.whatsappInstructions.animatedStep2')}</li>
-                        <li><Trans i18nKey="downloadModal.whatsappInstructions.animatedStep3">Ve a la sección de stickers y presiona <strong>Crear sticker</strong>.</Trans></li>
-                        <li>{t('downloadModal.whatsappInstructions.animatedStep4')}</li>
-                      </>
-                    ) : (
-                      <>
-                        <li><Trans i18nKey="downloadModal.whatsappInstructions.staticStep1">Descarga el sticker como <strong>WebP</strong>.</Trans></li>
-                        <li>{t('downloadModal.whatsappInstructions.staticStep2')}</li>
-                        <li><Trans i18nKey="downloadModal.whatsappInstructions.staticStep3">Ve a la sección de stickers y presiona <strong>Crear sticker</strong>.</Trans></li>
-                        <li>{t('downloadModal.whatsappInstructions.staticStep4')}</li>
-                      </>
-                    )}
-                  </ol>
-                </div>
-              )}
-              {activeTab === 'otras' && (
-                <div>
-                  <p><strong>{t('downloadModal.otherAppsInstructions.title')}</strong></p>
-                  <ol>
-                    {modalConfig.isAnimated ? (
-                      <>
-                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.animatedStep1">Descarga el sticker como <strong>GIF</strong> o <strong>WebP</strong>.</Trans></li>
-                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.animatedStep2">Instala una aplicación como <strong>Sticker Maker</strong> o <strong>Sticker.ly</strong>.</Trans></li>
-                        <li>{t('downloadModal.otherAppsInstructions.animatedStep3')}</li>
-                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.animatedStep4">Toca <strong>Añadir a WhatsApp</strong> para tenerlo listo en tu teclado.</Trans></li>
-                      </>
-                    ) : (
-                      <>
-                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.staticStep1">Descarga el sticker como <strong>WebP</strong>.</Trans></li>
-                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.staticStep2">Instala una aplicación como <strong>Sticker Maker</strong> o <strong>Sticker.ly</strong>.</Trans></li>
-                        <li>{t('downloadModal.otherAppsInstructions.staticStep3')}</li>
-                        <li><Trans i18nKey="downloadModal.otherAppsInstructions.staticStep4">Toca <strong>Añadir a WhatsApp</strong> para tenerlo listo en tu teclado.</Trans></li>
-                      </>
-                    )}
-                  </ol>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -647,24 +536,30 @@ function HomePage() {
 
 export default function App() {
   const { t, i18n } = useTranslation();
+  const { toggle, isDark } = useTheme();
   const currentLang = i18n.language || 'es';
 
   return (
     <BrowserRouter>
       <div className="container">
         <header className="header">
-          <div className="lang-switcher">
-            <button
-              className={`lang-btn ${currentLang.startsWith('es') ? 'active' : ''}`}
-              onClick={() => i18n.changeLanguage('es')}
-            >
-              ES
-            </button>
-            <button
-              className={`lang-btn ${currentLang.startsWith('en') ? 'active' : ''}`}
-              onClick={() => i18n.changeLanguage('en')}
-            >
-              EN
+          <div className="header-controls">
+            <div className="lang-switcher">
+              <button
+                className={`lang-btn ${currentLang.startsWith('es') ? 'active' : ''}`}
+                onClick={() => i18n.changeLanguage('es')}
+              >
+                ES
+              </button>
+              <button
+                className={`lang-btn ${currentLang.startsWith('en') ? 'active' : ''}`}
+                onClick={() => i18n.changeLanguage('en')}
+              >
+                EN
+              </button>
+            </div>
+            <button className="theme-toggle" onClick={toggle} aria-label="Toggle theme">
+              {isDark ? <SunIcon /> : <MoonIcon />}
             </button>
           </div>
 
