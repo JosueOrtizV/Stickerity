@@ -5,11 +5,13 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { ThinkingOrb } from 'thinking-orbs';
 import './index.css';
+import { Toaster, toast } from 'sonner';
 import StickerCard from './components/StickerCard';
 import FloatingSelectionBar from './components/FloatingSelectionBar';
 import DownloadPopover from './components/DownloadPopover';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
+import HelpPage from './pages/HelpPage';
 
 const getApiBaseUrl = () => {
   const hostname = window.location.hostname || 'localhost';
@@ -191,7 +193,11 @@ function HomePage() {
         } catch (e) {}
       }
 
-      if (receivedCount === 0) setError(t('errors.no_stickers_found'));
+      if (receivedCount === 0) {
+        setError(t('errors.no_stickers_found'));
+      } else {
+        toast.success(t('toast.extractionSuccess', { count: receivedCount }));
+      }
     } catch (err: any) {
       setError(getErrorMessage(err.message));
     } finally {
@@ -218,28 +224,18 @@ function HomePage() {
 
   const handleDeselectAll = () => setSelectedIndices(new Set());
 
-  // Per-card download handler
-  const handleCardDownload = async (rawUrl: string, index: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    // Check animation status if we haven't yet
-    if (!cardAnimated.has(index)) {
-      let isAnimated = rawUrl.toLowerCase().includes('awebp') || rawUrl.toLowerCase().includes('.gif');
-      try {
-        const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
-        const header = res.headers.get('X-Sticker-Animated');
-        if (header) isAnimated = header === 'true';
-      } catch (err) {
-        console.error('HEAD check failed', err);
-      }
-      setCardAnimated(prev => new Map(prev).set(index, isAnimated));
-
-      // If animated, let the popover handle it — don't auto-download
-      if (isAnimated) return;
+  // Check format on demand
+  const checkStickerFormat = async (rawUrl: string, index: number): Promise<boolean> => {
+    let isAnimated = rawUrl.toLowerCase().includes('awebp') || rawUrl.toLowerCase().includes('.gif');
+    try {
+      const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
+      const header = res.headers.get('X-Sticker-Animated');
+      if (header) isAnimated = header === 'true';
+    } catch (err) {
+      console.error('HEAD check failed', err);
     }
-
-    // For static, or if user already knows format via popover
-    // This path is handled by the popover's onDownload
+    setCardAnimated(prev => new Map(prev).set(index, isAnimated));
+    return isAnimated;
   };
 
   const executeCardDownload = async (rawUrl: string, index: number, format: 'webp' | 'gif') => {
@@ -259,6 +255,7 @@ function HomePage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(downloadUrl);
+      toast.success(t('toast.downloadSuccess'));
     } catch (err) {
       console.error(err);
       alert(t('errors.process_sticker_failed'));
@@ -309,6 +306,8 @@ function HomePage() {
       await processBatch(indicesToDownload);
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `Stickerity-Pack-${requestedFormat.toUpperCase()}.zip`);
+      toast.success(t('toast.zipSuccess'));
+      setSelectedIndices(new Set());
     } catch (err) {
       console.error(err);
       alert(t('errors.zip_failed'));
@@ -407,39 +406,6 @@ function HomePage() {
             const isAnimated = cardAnimated.get(index);
             const downloadFormat = cardDownloading.get(index) || null;
 
-            // If we know it's animated, show popover; otherwise show simple button
-            if (isAnimated === true) {
-              return (
-                <div
-                  key={index}
-                  className={`sticker-card ${selectedIndices.has(index) ? 'selected' : ''}`}
-                  onClick={() => toggleSelectSticker(index)}
-                  style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
-                >
-                  <div className="checkbox-badge">
-                    {selectedIndices.has(index) && (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    )}
-                  </div>
-                  <div className="sticker-img-wrapper">
-                    <img src={getStickerProxyUrl(stickerUrl)} alt={t('grid.stickerAlt', { index: index + 1 })} className="sticker-img" loading="lazy" />
-                  </div>
-                  <div className="card-actions">
-                    <DownloadPopover
-                      isAnimated={true}
-                      onDownload={(format) => executeCardDownload(stickerUrl, index, format)}
-                      downloadingFormat={downloadFormat}
-                      triggerLabel={t('grid.downloadButton')}
-                      gifLabel={t('downloadModal.downloadGif')}
-                      webpLabel={t('downloadModal.downloadWebp')}
-                      processingGifLabel={t('downloadModal.processingGif')}
-                      processingWebpLabel={t('downloadModal.processingWebp')}
-                    />
-                  </div>
-                </div>
-              );
-            }
-
             return (
               <StickerCard
                 key={index}
@@ -448,20 +414,21 @@ function HomePage() {
                 index={index}
                 isSelected={selectedIndices.has(index)}
                 onToggleSelect={toggleSelectSticker}
-                onDownloadClick={(rawUrl, idx, e) => {
-                  e.stopPropagation();
-                  // Check if animated first
-                  if (!cardAnimated.has(idx)) {
-                    handleCardDownload(rawUrl, idx, e);
-                    return;
-                  }
-                  // If static, download directly
-                  executeCardDownload(rawUrl, idx, 'webp');
-                }}
                 altText={t('grid.stickerAlt', { index: index + 1 })}
-                downloadLabel={t('grid.downloadButton')}
                 style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
-              />
+              >
+                <DownloadPopover
+                  isAnimated={isAnimated}
+                  onCheckFormat={() => checkStickerFormat(stickerUrl, index)}
+                  onDownload={(format) => executeCardDownload(stickerUrl, index, format)}
+                  downloadingFormat={downloadFormat}
+                  triggerLabel={t('grid.downloadButton')}
+                  gifLabel={t('downloadModal.downloadGif')}
+                  webpLabel={t('downloadModal.downloadWebp')}
+                  processingGifLabel={t('downloadModal.processingGif')}
+                  processingWebpLabel={t('downloadModal.processingWebp')}
+                />
+              </StickerCard>
             );
           })}
         </section>
@@ -558,6 +525,9 @@ export default function App() {
                 EN
               </button>
             </div>
+            <Link to="/help" className="theme-toggle" style={{ textDecoration: 'none', width: 'auto', padding: '0 10px', fontSize: 'var(--text-xs)', fontWeight: 600 }} aria-label="Help">
+              {t('header.help')}
+            </Link>
             <button className="theme-toggle" onClick={toggle} aria-label="Toggle theme">
               {isDark ? <SunIcon /> : <MoonIcon />}
             </button>
@@ -571,6 +541,7 @@ export default function App() {
 
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
         </Routes>
@@ -583,6 +554,7 @@ export default function App() {
           </div>
         </footer>
       </div>
+      <Toaster position="top-center" theme={isDark ? 'dark' : 'light'} toastOptions={{ className: 'stickerity-toast' }} />
     </BrowserRouter>
   );
 }

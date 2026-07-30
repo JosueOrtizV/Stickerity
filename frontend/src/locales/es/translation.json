@@ -1,7 +1,22 @@
 {
   "header": {
     "title": "Stickerity",
-    "subtitle": "Extrae stickers de cualquier enlace y envíalos directo a WhatsApp"
+    "subtitle": "Extrae stickers de cualquier enlace y envíalos directo a WhatsApp",
+    "help": "Ayuda"
+  },
+  "helpPage": {
+    "title": "Guía e Instrucciones",
+    "subtitle": "Cómo enviar tus stickers descargados a WhatsApp y otras aplicaciones de mensajería",
+    "whatsappTitle": "Crear sticker en WhatsApp directamente",
+    "whatsappStep1": "Descarga el sticker (GIF si es animado, WebP si es estático).",
+    "whatsappStep2": "Abre WhatsApp en tu teléfono o Web y entra a cualquier chat.",
+    "whatsappStep3": "Abre el panel de stickers y presiona 'Crear' (+).",
+    "whatsappStep4": "Selecciona el archivo descargado de tu dispositivo y guárdalo.",
+    "otherAppsTitle": "Usar Sticker Maker o Sticker.ly",
+    "otherAppsStep1": "Descarga tus stickers preferidos de Stickerity.",
+    "otherAppsStep2": "Abre una app de terceros como Sticker Maker o Sticker.ly.",
+    "otherAppsStep3": "Crea un paquete de stickers y añade los archivos descargados.",
+    "otherAppsStep4": "Presiona 'Añadir a WhatsApp' para enviarlos todos a tu teclado."
   },
   "search": {
     "placeholder": "Pega cualquier enlace con contenido o imágenes aquí...",
@@ -90,6 +105,11 @@
       "section3Title": "3. Cookies",
       "section3Text": "Utilizamos almacenamiento local básico únicamente para la caché técnica y el rendimiento de la aplicación."
     }
+  },
+  "toast": {
+    "extractionSuccess": "¡{{count}} stickers encontrados y listos!",
+    "downloadSuccess": "Sticker descargado con éxito",
+    "zipSuccess": "¡Paquete ZIP descargado con éxito!"
   },
   "footer": {
     "copyright": "© {{year}} Stickerity — Herramienta de utilidad libre",

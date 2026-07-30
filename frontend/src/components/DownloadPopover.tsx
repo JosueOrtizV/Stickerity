@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 interface DownloadPopoverProps {
-  isAnimated: boolean;
+  isAnimated?: boolean;
   onDownload: (format: 'webp' | 'gif') => void;
+  onCheckFormat?: () => Promise<boolean>;
   downloadingFormat: 'webp' | 'gif' | null;
   triggerLabel: string;
   gifLabel: string;
@@ -35,6 +36,7 @@ const SpinnerTiny = () => (
 export default function DownloadPopover({
   isAnimated,
   onDownload,
+  onCheckFormat,
   downloadingFormat,
   triggerLabel,
   gifLabel,
@@ -43,6 +45,7 @@ export default function DownloadPopover({
   processingWebpLabel,
 }: DownloadPopoverProps) {
   const [open, setOpen] = useState(false);
+  const [checking, setChecking] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,12 +70,38 @@ export default function DownloadPopover({
     return () => window.removeEventListener('keydown', handleEsc);
   }, [open]);
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isAnimated) {
+    if (checking || downloadingFormat !== null) return;
+
+    if (isAnimated === false) {
       onDownload('webp');
+      return;
+    }
+
+    if (isAnimated === true) {
+      setOpen(prev => !prev);
+      return;
+    }
+
+    // Format is unknown (undefined)
+    if (onCheckFormat) {
+      setChecking(true);
+      try {
+        const animResult = await onCheckFormat();
+        if (!animResult) {
+          onDownload('webp');
+        } else {
+          setOpen(true);
+        }
+      } catch (err) {
+        console.error('Format check error:', err);
+        onDownload('webp');
+      } finally {
+        setChecking(false);
+      }
     } else {
-      setOpen(!open);
+      onDownload('webp');
     }
   };
 
@@ -81,11 +110,19 @@ export default function DownloadPopover({
     setOpen(false);
   };
 
+  const isLoading = checking || downloadingFormat !== null;
+
   return (
     <div className="download-popover-wrapper" ref={ref}>
-      <button onClick={handleClick} className="btn-download-card">
-        {downloadingFormat ? <SpinnerTiny /> : <DownloadSmallIcon />}
-        {downloadingFormat
+      <button
+        onClick={handleClick}
+        className="btn-download-card"
+        disabled={checking}
+      >
+        {isLoading ? <SpinnerTiny /> : <DownloadSmallIcon />}
+        {checking
+          ? '...'
+          : downloadingFormat
           ? (downloadingFormat === 'gif' ? processingGifLabel : processingWebpLabel)
           : triggerLabel
         }

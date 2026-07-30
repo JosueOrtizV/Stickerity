@@ -1,7 +1,22 @@
 {
   "header": {
     "title": "Stickerity",
-    "subtitle": "Extract stickers from any link and send them straight to WhatsApp"
+    "subtitle": "Extract stickers from any link and send them straight to WhatsApp",
+    "help": "Help"
+  },
+  "helpPage": {
+    "title": "Guide & Instructions",
+    "subtitle": "How to send your downloaded stickers to WhatsApp and other messaging apps",
+    "whatsappTitle": "Create sticker directly in WhatsApp",
+    "whatsappStep1": "Download the sticker (GIF if animated, WebP if static).",
+    "whatsappStep2": "Open WhatsApp on your phone or Web and enter any chat.",
+    "whatsappStep3": "Open the stickers panel and tap 'Create' (+).",
+    "whatsappStep4": "Select the downloaded file from your device and save it.",
+    "otherAppsTitle": "Use Sticker Maker or Sticker.ly",
+    "otherAppsStep1": "Download your favorite stickers from Stickerity.",
+    "otherAppsStep2": "Open a third-party app like Sticker Maker or Sticker.ly.",
+    "otherAppsStep3": "Create a sticker pack and add the downloaded files.",
+    "otherAppsStep4": "Tap 'Add to WhatsApp' to export them all to your keyboard."
   },
   "search": {
     "placeholder": "Paste any link containing content or images here...",
@@ -90,6 +105,11 @@
       "section3Title": "3. Cookies",
       "section3Text": "We use basic local storage solely for technical caching and application performance."
     }
+  },
+  "toast": {
+    "extractionSuccess": "{{count}} stickers found and ready!",
+    "downloadSuccess": "Sticker downloaded successfully",
+    "zipSuccess": "ZIP package downloaded successfully!"
   },
   "footer": {
     "copyright": "© {{year}} Stickerity — Free utility tool",

@@ -928,7 +928,7 @@ html, body {
 .legal-text {
   font-size: var(--text-base);
   color: var(--color-ink-muted);
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
 .legal-text h3 {
@@ -995,4 +995,19 @@ html, body {
 /* --- Spinner utility --- */
 .spinner-icon {
   animation: spin 1s linear infinite;
+}
+
+/* --- Toaster Overrides --- */
+.stickerity-toast {
+  background-color: var(--color-surface) !important;
+  color: var(--color-ink) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-lg) !important;
+  font-family: var(--font-body) !important;
+  font-size: var(--text-sm) !important;
+  box-shadow: 0 8px 24px var(--color-shadow-lg) !important;
+}
+
+.stickerity-toast [data-icon] {
+  color: var(--color-teal) !important;
 }
