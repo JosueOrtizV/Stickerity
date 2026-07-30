@@ -507,10 +507,63 @@ export class StickerScraper {
       await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 }).catch(() => {});
       await page.waitForTimeout(1500);
 
-      const rawUrlsSet = new Set<string>();
+      const pathDeduper = new Set<string>();
+      const excludeKeywords = ['tracking', 'pixel', 'spacer', 'ad-', 'icon', 'avatar'];
 
-      // Function to extract currently visible images in the DOM
-      const extractCurrentDOM = async () => {
+      const processUrl = (imgUrl: string) => {
+        const lower = imgUrl.toLowerCase();
+        if (excludeKeywords.some((kw) => lower.includes(kw))) return;
+
+        let dedupeKey = imgUrl;
+        try {
+          const u = new URL(imgUrl);
+          if (u.hostname.includes('giphy.com') && u.pathname.includes('/media/')) {
+            const parts = u.pathname.split('/');
+            const filename = parts.pop() || '';
+            const parentDir = parts.pop() || '';
+            dedupeKey = u.hostname + '/' + parentDir;
+          } else if (u.hostname.includes('twimg.com')) {
+            if (u.pathname.includes('/media/')) {
+              dedupeKey = u.origin + u.pathname;
+            } else {
+              const cleanPath = u.pathname.replace(/_(mini|normal|bigger|reasonably_small|x96|\d+x\d+)\.[a-zA-Z0-9]+$/i, '');
+              dedupeKey = u.origin + cleanPath;
+            }
+          } else if (u.hostname.includes('cdninstagram.com')) {
+             dedupeKey = u.origin + u.pathname;
+          } else {
+            const proxyUrl = u.searchParams.get('url') || u.searchParams.get('src');
+            if (proxyUrl) {
+                try {
+                   const proxyU = new URL(proxyUrl, u.origin);
+                   dedupeKey = proxyU.origin + proxyU.pathname;
+                } catch(e) {
+                   dedupeKey = proxyUrl;
+                }
+            } else {
+                let cleanPath = u.pathname.replace(/\/styles\/[^/]+\/public/, '');
+                cleanPath = cleanPath.replace(/[-_]\d+x\d+(?=\.[a-zA-Z0-9]+$)/i, '');
+                cleanPath = cleanPath.replace(/_[0-9]+(_[0-9]+)?(?=\.[a-zA-Z0-9]+$)/i, '');
+                cleanPath = cleanPath.replace(/_(d4k|f4k|cfhd|efhd|bhd|hsd|gsd|mobile)(?=\.[a-z0-9]+$)/i, '');
+                cleanPath = cleanPath.replace(/\.[a-zA-Z0-9]+$/i, '');
+                dedupeKey = u.origin + cleanPath;
+            }
+          }
+        } catch (e) {}
+
+        if (!pathDeduper.has(dedupeKey)) {
+          pathDeduper.add(dedupeKey);
+          if (result.stickers.length < 150) {
+            result.stickers.push(imgUrl);
+            if (onProgress) {
+              try { onProgress(imgUrl); } catch (e) {}
+            }
+          }
+        }
+      };
+
+      // Function to extract currently visible images in the DOM and process them immediately
+      const extractAndProcessDOM = async () => {
         const urls = await page.evaluate(() => {
           const found: string[] = [];
           const els = document.querySelectorAll('img, svg image, source, picture source');
@@ -558,48 +611,32 @@ export class StickerScraper {
           }
           return found;
         });
-        
-        urls.forEach(u => rawUrlsSet.add(u));
+
+        for (const u of urls) {
+          processUrl(u);
+        }
       };
 
       // Extract initially
-      await extractCurrentDOM();
+      await extractAndProcessDOM();
 
       // Progressive multi-step scroll to trigger lazy loading and extract continuously
-      for (let i = 0; i < 15; i++) {
-        await page.keyboard.press('PageDown');
-        await page.waitForTimeout(600);
-        await extractCurrentDOM();
-      }
-
-      // Filter and deduplicate on backend by pathname
-      const pathDeduper = new Set<string>();
-      const excludeKeywords = ['tracking', 'pixel', 'spacer', 'ad-', 'icon', 'logo', 'avatar'];
-
-      for (const imgUrl of rawUrlsSet) {
-        const lower = imgUrl.toLowerCase();
-        if (excludeKeywords.some((kw) => lower.includes(kw))) continue;
-
-        // Deduplicate by stripping query parameters and file extensions
-        // This prevents getting both .webp and .gif versions of the exact same image
-        let dedupeKey = imgUrl;
+      for (let i = 0; i < 25; i++) {
+        if (result.stickers.length >= 150) break;
+        
         try {
-          const u = new URL(imgUrl);
-          // Remove the extension from the pathname (e.g., /path/file.webp -> /path/file)
-          const pathNoExt = u.pathname.replace(/\.[a-zA-Z0-9]+$/, '');
-          dedupeKey = u.origin + pathNoExt;
+          await page.keyboard.press('Escape');
+          const closeBtns = page.locator('[aria-label="Close"], [aria-label="Cerrar"], .close, button:has-text("Not now"), button:has-text("Ahora no")');
+          if (await closeBtns.count() > 0 && await closeBtns.first().isVisible().catch(()=>false)) {
+            await closeBtns.first().click({ force: true }).catch(() => {});
+          }
         } catch (e) {}
 
-        if (!pathDeduper.has(dedupeKey)) {
-          pathDeduper.add(dedupeKey);
-          result.stickers.push(imgUrl);
-          if (onProgress) {
-            try { onProgress(imgUrl); } catch (e) {}
-          }
-        }
+        await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+        await page.waitForTimeout(800);
+        await extractAndProcessDOM();
       }
 
-      result.stickers = result.stickers.slice(0, 150); // Limit top 150
       log(`Found ${result.stickers.length} generic images from ${url}`);
 
     } catch (e) {

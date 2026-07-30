@@ -21,7 +21,8 @@
   "search": {
     "placeholder": "Paste any link containing content or images here...",
     "button": "Get Stickers",
-    "loading": "Extracting..."
+    "loading": "Extracting...",
+    "supportedSources": "Social networks · Web pages · And more"
   },
   "loadingState": {
     "title": "Analyzing link and searching for stickers...",

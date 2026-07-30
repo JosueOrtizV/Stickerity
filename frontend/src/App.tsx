@@ -374,7 +374,7 @@ function HomePage() {
 
       {!loading && stickers.length === 0 && !error && (
         <p className="trust-line">
-          TikTok · Giphy · Tenor · GIPHY Stickers · y más
+          {t('search.supportedSources')}
         </p>
       )}
 
