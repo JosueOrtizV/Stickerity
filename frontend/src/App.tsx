@@ -62,6 +62,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'otras'>('whatsapp');
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
   const [downloadingFormat, setDownloadingFormat] = useState<'webp' | 'gif' | null>(null);
+  const [checkingZipFormat, setCheckingZipFormat] = useState(false);
 
   const getErrorMessage = (errKeyOrMsg: string) => {
     if (!errKeyOrMsg) return t('errors.server_error');
@@ -119,15 +120,7 @@ export default function App() {
             if (data.type === 'sticker' && data.sticker) {
               receivedCount++;
               const newStickerUrl = data.sticker;
-              setStickers((prev) => {
-                const nextIndex = prev.length;
-                setSelectedIndices((prevSelected) => {
-                  const updated = new Set(prevSelected);
-                  updated.add(nextIndex);
-                  return updated;
-                });
-                return [...prev, newStickerUrl];
-              });
+              setStickers((prev) => [...prev, newStickerUrl]);
             } else if (data.type === 'error') {
               throw new Error(data.error || t('errors.extraction_failed'));
             }
@@ -145,15 +138,7 @@ export default function App() {
           if (data.type === 'sticker' && data.sticker) {
             receivedCount++;
             const newStickerUrl = data.sticker;
-            setStickers((prev) => {
-              const nextIndex = prev.length;
-              setSelectedIndices((prevSelected) => {
-                const updated = new Set(prevSelected);
-                updated.add(nextIndex);
-                return updated;
-              });
-              return [...prev, newStickerUrl];
-            });
+            setStickers((prev) => [...prev, newStickerUrl]);
           }
         } catch (e) {}
       }
@@ -197,9 +182,21 @@ export default function App() {
     setSelectedIndices(new Set());
   };
 
-  const handleDownloadClick = (rawUrl: string, index: number, e: React.MouseEvent) => {
+  const handleDownloadClick = async (rawUrl: string, index: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    const isAnimated = rawUrl.toLowerCase().includes('awebp') || rawUrl.toLowerCase().includes('.gif');
+    let isAnimated = rawUrl.toLowerCase().includes('awebp') || rawUrl.toLowerCase().includes('.gif');
+    
+    // Quick HEAD request to check actual animated status from backend
+    try {
+      const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
+      const animatedHeader = res.headers.get('X-Sticker-Animated');
+      if (animatedHeader) {
+        isAnimated = animatedHeader === 'true';
+      }
+    } catch(err) {
+      console.error('Failed to get animated header', err);
+    }
+
     setModalConfig({ url: rawUrl, index, isAnimated });
     setActiveTab('whatsapp');
   };
@@ -210,8 +207,12 @@ export default function App() {
     try {
       const proxyUrl = getStickerProxyUrl(modalConfig.url) + `&format=${format}`;
       const res = await fetch(proxyUrl);
+      
+      const contentType = res.headers.get('content-type') || '';
+      const actualExt = contentType.includes('gif') ? 'gif' : 'webp';
+      
       const blob = await res.blob();
-      const filename = `stickerity-${modalConfig.index + 1}.${format}`;
+      const filename = `stickerity-${modalConfig.index + 1}.${actualExt}`;
       
       const downloadUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -246,14 +247,14 @@ export default function App() {
         await Promise.all(
           batch.map(async (idx) => {
             const rawUrl = stickers[idx];
-            const isAnimated = rawUrl.toLowerCase().includes('awebp') || rawUrl.toLowerCase().includes('.gif');
-            // Static stickers are always WebP; animated stickers follow requestedFormat
-            const targetFormat = isAnimated ? requestedFormat : 'webp';
-            const proxyUrl = getStickerProxyUrl(rawUrl) + `&format=${targetFormat}`;
+            const proxyUrl = getStickerProxyUrl(rawUrl) + `&format=${requestedFormat}`;
             try {
               const res = await fetch(proxyUrl);
+              const contentType = res.headers.get('content-type') || '';
+              const actualExt = contentType.includes('gif') ? 'gif' : 'webp';
+              
               const blob = await res.blob();
-              const filename = `stickerity-${idx + 1}.${targetFormat}`;
+              const filename = `stickerity-${idx + 1}.${actualExt}`;
               zip.file(filename, blob);
             } catch (e) {
               console.error(`Failed to include sticker #${idx + 1} in zip`, e);
@@ -279,13 +280,31 @@ export default function App() {
     }
   };
 
-  const handleZipButtonClick = () => {
+  const handleZipButtonClick = async () => {
     if (selectedIndices.size === 0) return;
 
-    const hasAnimated = Array.from(selectedIndices).some((idx) => {
-      const rawUrl = stickers[idx]?.toLowerCase() || '';
-      return rawUrl.includes('awebp') || rawUrl.includes('.gif');
-    });
+    setCheckingZipFormat(true);
+    let hasAnimated = false;
+    
+    try {
+      const selectedUrls = Array.from(selectedIndices).map(idx => stickers[idx]);
+      
+      const checkPromises = selectedUrls.map(async (rawUrl) => {
+        try {
+          const res = await fetch(getStickerProxyUrl(rawUrl), { method: 'HEAD' });
+          return res.headers.get('X-Sticker-Animated') === 'true';
+        } catch (e) {
+          return false;
+        }
+      });
+      
+      const results = await Promise.all(checkPromises);
+      hasAnimated = results.some(isAnim => isAnim);
+    } catch (e) {
+      console.error('Failed to check formats', e);
+    } finally {
+      setCheckingZipFormat(false);
+    }
 
     if (hasAnimated) {
       setZipModalOpen(true);
@@ -381,16 +400,17 @@ export default function App() {
             <button
               className="btn-primary"
               onClick={handleZipButtonClick}
-              disabled={selectedCount === 0}
+              disabled={selectedCount === 0 || checkingZipFormat}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
                 opacity: selectedCount === 0 ? 0.5 : 1,
-                cursor: selectedCount === 0 ? 'not-allowed' : 'pointer'
+                cursor: selectedCount === 0 || checkingZipFormat ? 'not-allowed' : 'pointer'
               }}
             >
-              <DownloadIcon /> {t('grid.downloadZip', { count: selectedCount })}
+              {checkingZipFormat ? <SpinnerIcon /> : <DownloadIcon />}
+              {checkingZipFormat ? t('zipModal.progressTitle') : t('grid.downloadZip', { count: selectedCount })}
             </button>
           </div>
 

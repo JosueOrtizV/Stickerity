@@ -12,10 +12,17 @@ export interface ProcessedStickerResult {
 }
 
 export class ImageProcessor {
+  private rawCache = new Map<string, { buffer: Buffer, time: number }>();
+
   /**
-   * Downloads raw image buffer from URL
+   * Downloads raw image buffer from URL (with 5-minute memory cache)
    */
   async downloadImage(url: string): Promise<Buffer> {
+    const cached = this.rawCache.get(url);
+    if (cached && Date.now() - cached.time < 5 * 60 * 1000) {
+      return cached.buffer;
+    }
+
     let referer = 'https://www.tiktok.com/';
     try {
       referer = new URL(url).origin + '/';
@@ -29,13 +36,27 @@ export class ImageProcessor {
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
       }
     });
-    return Buffer.from(response.data);
+    
+    const buffer = Buffer.from(response.data);
+    this.rawCache.set(url, { buffer, time: Date.now() });
+    
+    // Simple cleanup of old entries to prevent memory leaks
+    if (this.rawCache.size > 500) {
+      const now = Date.now();
+      for (const [key, val] of this.rawCache.entries()) {
+        if (now - val.time > 5 * 60 * 1000) {
+          this.rawCache.delete(key);
+        }
+      }
+    }
+    
+    return buffer;
   }
 
   /**
    * Generates a safe, bug-free preview for the web grid (GIF for animated, WebP for static)
    */
-  async createPreview(inputBuffer: Buffer): Promise<{ buffer: Buffer, mimeType: string }> {
+  async createPreview(inputBuffer: Buffer): Promise<{ buffer: Buffer, mimeType: string, isAnimated: boolean }> {
     const metadata = await sharp(inputBuffer, { animated: true }).metadata();
     const isAnimated = (metadata.pages || 0) > 1;
 
@@ -49,13 +70,13 @@ export class ImageProcessor {
         })
         .gif({ loop: 0 })
         .toBuffer();
-      return { buffer, mimeType: 'image/gif' };
+      return { buffer, mimeType: 'image/gif', isAnimated: true };
     } else {
       const buffer = await sharp(inputBuffer)
         .resize(256, 256, { fit: 'inside' })
         .webp({ quality: 80 })
         .toBuffer();
-      return { buffer, mimeType: 'image/webp' };
+      return { buffer, mimeType: 'image/webp', isAnimated: false };
     }
   }
 

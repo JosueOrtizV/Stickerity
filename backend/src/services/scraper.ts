@@ -27,12 +27,18 @@ export class StickerScraper {
     videoUrl: string,
     onProgress?: (stickerUrl: string) => void
   ): Promise<StickerExtractionResult> {
+    const startTime = Date.now();
+    const log = (msg: string) => {
+      const ms = Date.now() - startTime;
+      console.log(`[Scraper][${(ms / 1000).toFixed(2)}s] ${msg}`);
+    };
+
     const result: StickerExtractionResult = {
       source_url: videoUrl,
       stickers: []
     };
 
-    console.log(`[Scraper] Starting TikTok extraction for ${videoUrl}`);
+    log(`Starting TikTok extraction for ${videoUrl}`);
 
     const browser = await chromium.launch({ headless: true });
     let globalTimeout: NodeJS.Timeout | null = null;
@@ -70,7 +76,7 @@ export class StickerScraper {
           if (!addedHashes.has(uniqueKey)) {
             addedHashes.add(uniqueKey);
             result.stickers.push(rawUrl);
-            console.log(`[Scraper] Found sticker #${result.stickers.length} (${uniqueKey.substring(0, 8)}...)`);
+            log(`Found sticker #${result.stickers.length} (${uniqueKey.substring(0, 8)}...)`);
             if (onProgress) {
               try { onProgress(rawUrl); } catch (e) {}
             }
@@ -113,7 +119,7 @@ export class StickerScraper {
                 seenCursors.add(cursor);
                 listPagesLoaded++;
                 listHasMore = json.has_more === 1 || json.has_more === true;
-                console.log(`[Scraper] Comment page ${listPagesLoaded}: ${json.comments?.length || 0} comments, cursor=${cursor}, has_more=${listHasMore}, total=${json.total || 0}`);
+                log(`Comment page ${listPagesLoaded}: ${json.comments?.length || 0} comments, cursor=${cursor}, has_more=${listHasMore}, total=${json.total || 0}`);
               }
             } else {
               replyApisReceived++;
@@ -124,9 +130,9 @@ export class StickerScraper {
         });
 
         // Navigate
-        console.log(`[Scraper] Navigating to page...`);
-        await page.goto(videoUrl, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {
-          console.log(`[Scraper] Navigation timeout, proceeding...`);
+        log(`Navigating to page...`);
+        await page.goto(videoUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {
+          log(`Navigation timeout, proceeding...`);
         });
         await page.waitForTimeout(2000);
 
@@ -146,16 +152,36 @@ export class StickerScraper {
         } catch (e) {}
 
         // Click comments
-        console.log(`[Scraper] Clicking to load comments...`);
+        log(`Clicking to load comments...`);
         try {
+          const isCommentPanelVisible = async () => {
+            const panel = page.locator('[class*="CommentListContainer"], [data-e2e="comment-list"], [class*="DivCommentObjectWrapper"]').first();
+            return await panel.isVisible().catch(() => false);
+          };
+
           const tryClickComments = async () => {
+            // If the comment panel is ALREADY visible in the DOM, do not click again (avoid toggling it off!)
+            if (await isCommentPanelVisible()) {
+              return;
+            }
+
+            // Dismiss any TikTok login/cookie modals safely without using Escape
+            const modalCloseBtn = page.locator('[data-e2e="modal-close-inner-button"], [class*="ModalClose"], [class*="CloseButton"]').first();
+            if (await modalCloseBtn.isVisible().catch(() => false)) {
+              await modalCloseBtn.click({ force: true }).catch(() => {});
+              await page.waitForTimeout(300);
+            }
+
             const commentIcon = page.locator('button[data-e2e="browse-comment-icon"], [data-e2e="comment-icon"], [class*="CommentIcon"]').first();
             const commentsTextTab = page.locator('text="Comments"').or(page.locator('text="Comentarios"')).first();
+            const commentCount = page.locator('[class*="CommentCount"], [data-e2e="comment-count"]').first();
 
-            if (await commentIcon.isVisible()) {
+            if (await commentIcon.isVisible().catch(() => false)) {
               await commentIcon.click({ force: true }).catch(() => {});
-            } else if (await commentsTextTab.isVisible()) {
+            } else if (await commentsTextTab.isVisible().catch(() => false)) {
               await commentsTextTab.click({ force: true }).catch(() => {});
+            } else if (await commentCount.isVisible().catch(() => false)) {
+              await commentCount.click({ force: true }).catch(() => {});
             } else {
               // TikTok shortcut key 'c' opens/toggles comment panel
               await page.keyboard.press('c').catch(() => {});
@@ -166,80 +192,179 @@ export class StickerScraper {
 
           await page.waitForResponse(
             (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
-            { timeout: 6000 }
+            { timeout: 3500 }
           ).catch(() => {});
-          await page.waitForTimeout(500);
+          await page.waitForTimeout(300);
 
-          // Cold-start fallback: If no comment API was triggered yet, retry clicking
+          // Cold-start fallback 1: If no comment API was triggered yet, retry clicking
           if (listPagesLoaded === 0) {
-            console.log(`[Scraper] Cold start delay detected, retrying comment trigger...`);
-            await page.keyboard.press('c').catch(() => {});
+            log(`Cold start delay detected, retrying comment trigger...`);
             await tryClickComments();
+            await page.waitForResponse(
+              (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
+              { timeout: 5000 }
+            ).catch(() => {});
+            await page.waitForTimeout(300);
+          }
+
+          // Cold-start fallback 2: If still no comment API triggered, try shortcut 'c' & direct comment count click
+          if (listPagesLoaded === 0) {
+            log(`Second cold start retry, attempting direct clicks...`);
+            if (!(await isCommentPanelVisible())) {
+              await page.keyboard.press('c').catch(() => {});
+              await page.waitForTimeout(300);
+              const commentCount = page.locator('[class*="CommentCount"], [data-e2e="comment-count"]').first();
+              if (await commentCount.isVisible().catch(() => false)) {
+                await commentCount.click({ force: true }).catch(() => {});
+              }
+            }
             await page.waitForResponse(
               (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
               { timeout: 6000 }
             ).catch(() => {});
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(300);
           }
 
           // PHASE 1: Load ALL comment pages
-          console.log(`[Scraper] Phase 1: Loading all comment pages...`);
+          log(`Phase 1: Loading all comment pages...`);
           
           let consecutiveFailures = 0;
           const maxPages = 50;
           
-          while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 3) {
+          while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 5) {
             const prevPages = listPagesLoaded;
             
-            await page.evaluate(() => {
+            // 1. Mouse Wheel Scroll (safest)
+            // Target DivCommentListContainer, then fall back to RightPanel
+            const hoverTarget = await page.$('[class*="CommentListContainer"], [class*="CommentList"]:not([class*="WithoutScroll"]), [class*="RightPanel"], [data-e2e="comment-list"]');
+            if (hoverTarget) {
+              await hoverTarget.hover({ timeout: 500 }).catch(() => {});
+            }
+            await page.mouse.wheel(0, 3000).catch(() => {});
+            
+            // 2. DOM Scroll Fallback
+            const scrolledClass = await page.evaluate(() => {
+              window.scrollBy(0, 3000); // Case A: window level scroll
+              
               const allDivs = Array.from(document.querySelectorAll('div'));
-              for (const el of allDivs) {
+              let targetClass = 'none';
+              const blacklist = /Column|WithoutScroll|FlexLayout|TabContainer|CountContainer|PlayerContainer|VideoPlayer|ItemContainer/i;
+              
+              // Case B1: Exact match for CommentListContainer (the real scroll container)
+              for (let i = 0; i < allDivs.length; i++) {
+                const el = allDivs[i];
                 const cls = el.className?.toString() || '';
-                if (cls.includes('CommentMain') || cls.includes('comment-main')) {
+                if (cls.match(/CommentListContainer/i) && !cls.match(blacklist)) {
                   if (el.scrollHeight > el.clientHeight && el.clientHeight > 100) {
+                    el.scrollTop += 3000;
+                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    targetClass = cls;
+                    break;
+                  }
+                }
+              }
+
+              // Case B2: broader strict match if B1 didn't trigger
+              if (targetClass === 'none') {
+                for (let i = 0; i < allDivs.length; i++) {
+                  const el = allDivs[i];
+                  const cls = el.className?.toString() || '';
+                  if (cls.match(/CommentMain|comment-main|CommentList|RightPanel/i) && !cls.match(blacklist)) {
+                    if (el.scrollHeight > el.clientHeight && el.clientHeight > 100) {
+                      el.scrollTop += 3000;
+                      el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                      targetClass = cls;
+                      break;
+                    }
+                  }
+                }
+              }
+              
+              // Case C: broad fallback (any scrollable div)
+              if (targetClass === 'none') {
+                for (let i = 0; i < allDivs.length; i++) {
+                  const el = allDivs[i];
+                  const cls = el.className?.toString() || '';
+                  if (!cls.match(blacklist) && el.scrollHeight > el.clientHeight && el.clientHeight > 100 && el.clientHeight < 900) {
+                    el.scrollTop += 3000;
+                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    targetClass = cls || 'unknown-div';
+                    break;
+                  }
+                }
+              }
+
+              // Case D: Force-scroll RightPanelContainer even if NOT scrollable yet
+              // When comments just loaded (1 page), the list container may fit entirely
+              // but we still need to trigger the IntersectionObserver
+              if (targetClass === 'none') {
+                for (let i = 0; i < allDivs.length; i++) {
+                  const el = allDivs[i];
+                  const cls = el.className?.toString() || '';
+                  if (cls.match(/CommentListContainer|RightPanel/i) && !cls.match(blacklist) && el.clientHeight > 100) {
                     el.scrollTop = el.scrollHeight;
-                    return;
+                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    targetClass = 'force-' + (cls.split(' ')[0] || 'panel');
+                    break;
                   }
                 }
               }
-              let commentContainer: HTMLElement | null = null;
-              for (const el of allDivs) {
-                if (el.scrollHeight > el.clientHeight && el.clientHeight > 100 && el.clientHeight < 750) {
-                  if (!commentContainer || el.scrollHeight > commentContainer.scrollHeight) {
-                    commentContainer = el;
-                  }
-                }
-              }
-              if (commentContainer) {
-                commentContainer.scrollTop = commentContainer.scrollHeight;
-              }
+
+              return targetClass;
             });
 
             try {
               await page.waitForResponse(
                 (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply') && res.status() === 200,
-                { timeout: 3500 }
+                { timeout: 5500 }
               );
-              await page.waitForTimeout(200);
+              await page.waitForTimeout(300);
             } catch (e) {}
 
             if (listPagesLoaded > prevPages) {
               consecutiveFailures = 0;
             } else {
               consecutiveFailures++;
+              log(`Phase 1 pause (${consecutiveFailures}/5 failures). Container: ${scrolledClass.split(' ')[0]}`);
+              
+              // Flick the mouse wheel to wake up intersection observer
+              if (hoverTarget) await hoverTarget.hover({ timeout: 500 }).catch(() => {});
+              await page.mouse.wheel(0, -1000).catch(() => {});
+              await page.waitForTimeout(100);
+              await page.mouse.wheel(0, 4000).catch(() => {});
+              
+              // Jiggle scroll on DOM - force-scroll any comment-related container
               await page.evaluate(() => {
                 const allDivs = Array.from(document.querySelectorAll('div'));
-                for (const el of allDivs) {
+                const blacklist = /Column|WithoutScroll|FlexLayout|TabContainer|CountContainer|PlayerContainer|VideoPlayer|ItemContainer/i;
+                let scrolled = false;
+                for (let i = 0; i < allDivs.length; i++) {
+                  const el = allDivs[i];
                   const cls = el.className?.toString() || '';
-                  if ((cls.includes('CommentMain') || cls.includes('comment-main') || cls.includes('CommentList')) && 
-                      el.scrollHeight > el.clientHeight) {
-                    el.scrollTop += 3000;
-                    return;
+                  // Priority: force-scroll any comment container regardless of scrollHeight
+                  if (cls.match(/CommentListContainer|RightPanel/i) && !cls.match(blacklist) && el.clientHeight > 100) {
+                    el.scrollTop = 0;
+                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    setTimeout(() => { 
+                      el.scrollTop = el.scrollHeight + 3000; 
+                      el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                    }, 150);
+                    scrolled = true;
                   }
                 }
-                for (const el of allDivs) {
-                  if (el.scrollHeight > el.clientHeight && el.clientHeight > 100 && el.clientHeight < 750) {
-                    el.scrollTop += 3000;
+                // Fallback: try any non-blacklisted scrollable div
+                if (!scrolled) {
+                  for (let i = 0; i < allDivs.length; i++) {
+                    const el = allDivs[i];
+                    const cls = el.className?.toString() || '';
+                    if (!cls.match(blacklist) && el.scrollHeight > el.clientHeight && el.clientHeight > 100 && el.clientHeight < 900) {
+                      el.scrollTop = Math.max(0, el.scrollTop - 1500);
+                      el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                      setTimeout(() => { 
+                        el.scrollTop = el.scrollHeight; 
+                        el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                      }, 150);
+                    }
                   }
                 }
               });
@@ -247,10 +372,10 @@ export class StickerScraper {
             }
           }
           
-          console.log(`[Scraper] Phase 1 complete: ${listPagesLoaded} pages, has_more=${listHasMore}, ${result.stickers.length} stickers so far`);
+          log(`Phase 1 complete: ${listPagesLoaded} pages, has_more=${listHasMore}, ${result.stickers.length} stickers so far`);
 
           // PHASE 2: Expand reply threads
-          console.log(`[Scraper] Phase 2: Expanding reply threads...`);
+          log(`Phase 2: Expanding reply threads...`);
           
           for (let pass = 0; pass < 3; pass++) {
             const replyButtons = page.locator('text=/View.*repl|Ver.*respuest/i');
@@ -258,7 +383,7 @@ export class StickerScraper {
             
             if (replyCount === 0) break;
             
-            console.log(`[Scraper] Reply pass ${pass + 1}: ${replyCount} buttons`);
+            log(`Reply pass ${pass + 1}: ${replyCount} buttons`);
             
             for (let j = 0; j < replyCount; j++) {
               try {
@@ -307,12 +432,21 @@ export class StickerScraper {
             await page.waitForTimeout(400);
           }
 
-          console.log(`[Scraper] Phase 2 complete: ${replyApisReceived} reply APIs`);
+          log(`Phase 2 complete: ${replyApisReceived} reply APIs`);
 
-          // PHASE 3: DOM scan as safety net
-          console.log(`[Scraper] Phase 3: DOM scan...`);
+          // PHASE 3: DOM scan as safety net using specific data-e2e attribute
+          log(`Phase 3: DOM scan...`);
           const domStickerUrls = await page.evaluate(() => {
             const found: string[] = [];
+            
+            // Priority 1: Exact data-e2e selector found in real TikTok DOM
+            document.querySelectorAll('[data-e2e="comment-sticker-comment"] img, [class*="ImgStickerMedia"]').forEach((el) => {
+              const img = el as HTMLImageElement;
+              const src = img.src || img.getAttribute('data-src') || '';
+              if (src && !found.includes(src)) found.push(src);
+            });
+
+            // Priority 2: Generic image scan fallback
             document.querySelectorAll('img').forEach((el) => {
               const src = el.src || el.getAttribute('data-src') || '';
               if ((src.includes('ibyteimg.com') || src.includes('byteimg.com')) && (src.includes('sticker') || src.includes('.awebp'))) {
@@ -324,10 +458,10 @@ export class StickerScraper {
           domStickerUrls.forEach((url) => addStickerUrl(url));
 
         } catch (e) {
-          console.log(`[Scraper] Error during extraction steps:`, e);
+          log(`Error during extraction steps: ${(e as Error).message}`);
         }
 
-        console.log(`[Scraper] Done! ${result.stickers.length} stickers from ${listPagesLoaded} pages + ${replyApisReceived} replies`);
+        log(`Done! ${result.stickers.length} stickers from ${listPagesLoaded} pages + ${replyApisReceived} replies`);
       })();
 
       await Promise.race([extractionPromise, timeoutPromise]);
@@ -349,12 +483,18 @@ export class StickerScraper {
     url: string,
     onProgress?: (stickerUrl: string) => void
   ): Promise<StickerExtractionResult> {
+    const startTime = Date.now();
+    const log = (msg: string) => {
+      const ms = Date.now() - startTime;
+      console.log(`[Scraper][${(ms / 1000).toFixed(2)}s] ${msg}`);
+    };
+
     const result: StickerExtractionResult = {
       source_url: url,
       stickers: []
     };
 
-    console.log(`[Scraper] Starting generic image extraction for ${url}`);
+    log(`Starting generic image extraction for ${url}`);
     const browser = await chromium.launch({ headless: true });
     
     try {
@@ -367,71 +507,91 @@ export class StickerScraper {
       await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 }).catch(() => {});
       await page.waitForTimeout(1500);
 
-      // Progressive multi-step scroll to trigger lazy loading
-      for (let i = 0; i < 4; i++) {
-        await page.evaluate(() => window.scrollBy(0, 600));
+      const rawUrlsSet = new Set<string>();
+
+      // Function to extract currently visible images in the DOM
+      const extractCurrentDOM = async () => {
+        const urls = await page.evaluate(() => {
+          const found: string[] = [];
+          const els = document.querySelectorAll('img, svg image, source, picture source');
+          for (let i = 0; i < els.length; i++) {
+            const el = els[i] as any;
+            
+            if (el.tagName === 'IMG') {
+              const width = el.naturalWidth || el.clientWidth || 0;
+              const height = el.naturalHeight || el.clientHeight || 0;
+              if (width > 0 && width < 40) continue;
+              if (height > 0 && height < 40) continue;
+            }
+
+            const candidates = [
+              el.src, el.getAttribute('data-src'), el.getAttribute('data-original'),
+              el.getAttribute('data-url'), el.getAttribute('data-src-webp')
+            ];
+
+            for (const src of candidates) {
+              if (src && typeof src === 'string' && src.startsWith('http')) found.push(src);
+            }
+
+            const srcset = el.getAttribute('srcset') || el.getAttribute('data-srcset');
+            if (srcset) {
+              const parts = srcset.split(',');
+              for (let j = 0; j < parts.length; j++) {
+                const candidate = parts[j].trim().split(' ')[0];
+                if (candidate && candidate.startsWith('http')) found.push(candidate);
+              }
+            }
+          }
+
+          const bgEls = document.querySelectorAll('div, span, a, section, article');
+          for (let i = 0; i < bgEls.length; i++) {
+            const style = window.getComputedStyle(bgEls[i]);
+            const bg = style.backgroundImage;
+            if (bg && bg !== 'none' && bg.includes('url(')) {
+              const match = bg.match(/url\((['"]?)(.*?)\1\)/);
+              if (match && match[2]) {
+                let clean = match[2].trim();
+                if (clean.startsWith('//')) clean = 'https:' + clean;
+                if (clean.startsWith('http')) found.push(clean);
+              }
+            }
+          }
+          return found;
+        });
+        
+        urls.forEach(u => rawUrlsSet.add(u));
+      };
+
+      // Extract initially
+      await extractCurrentDOM();
+
+      // Progressive multi-step scroll to trigger lazy loading and extract continuously
+      for (let i = 0; i < 15; i++) {
+        await page.keyboard.press('PageDown');
         await page.waitForTimeout(600);
+        await extractCurrentDOM();
       }
-
-      const rawUrls = await page.evaluate(() => {
-        const found: string[] = [];
-
-        // 1. Scan <img> elements
-        const imgs = document.querySelectorAll('img, svg image');
-        for (let i = 0; i < imgs.length; i++) {
-          const img = imgs[i] as any;
-          const width = img.naturalWidth || img.clientWidth || 0;
-          const height = img.naturalHeight || img.clientHeight || 0;
-          if (width > 0 && width < 40) continue;
-          if (height > 0 && height < 40) continue;
-
-          const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-original') || '';
-          if (src && typeof src === 'string' && src.startsWith('http') && !found.includes(src)) {
-            found.push(src);
-          }
-
-          const srcset = img.getAttribute('srcset');
-          if (srcset) {
-            const parts = srcset.split(',');
-            for (let j = 0; j < parts.length; j++) {
-              const candidate = parts[j].trim().split(' ')[0];
-              if (candidate && candidate.startsWith('http') && !found.includes(candidate)) {
-                found.push(candidate);
-              }
-            }
-          }
-        }
-
-        // 2. Scan background images in CSS
-        const els = document.querySelectorAll('div, span, a, section');
-        for (let i = 0; i < els.length; i++) {
-          const style = window.getComputedStyle(els[i]);
-          const bg = style.backgroundImage;
-          if (bg && bg !== 'none' && bg.includes('url(')) {
-            const match = bg.match(/url\((['"]?)(.*?)\1\)/);
-            if (match && match[2]) {
-              let clean = match[2].trim();
-              if (clean.startsWith('//')) clean = 'https:' + clean;
-              if (clean.startsWith('http') && !found.includes(clean)) {
-                found.push(clean);
-              }
-            }
-          }
-        }
-
-        return found;
-      });
 
       // Filter and deduplicate on backend by pathname
       const pathDeduper = new Set<string>();
-      const excludeKeywords = ['tracking', 'pixel', 'spacer', 'ad-'];
+      const excludeKeywords = ['tracking', 'pixel', 'spacer', 'ad-', 'icon', 'logo', 'avatar'];
 
-      for (const imgUrl of rawUrls) {
+      for (const imgUrl of rawUrlsSet) {
         const lower = imgUrl.toLowerCase();
         if (excludeKeywords.some((kw) => lower.includes(kw))) continue;
 
-        if (!pathDeduper.has(imgUrl)) {
-          pathDeduper.add(imgUrl);
+        // Deduplicate by stripping query parameters and file extensions
+        // This prevents getting both .webp and .gif versions of the exact same image
+        let dedupeKey = imgUrl;
+        try {
+          const u = new URL(imgUrl);
+          // Remove the extension from the pathname (e.g., /path/file.webp -> /path/file)
+          const pathNoExt = u.pathname.replace(/\.[a-zA-Z0-9]+$/, '');
+          dedupeKey = u.origin + pathNoExt;
+        } catch (e) {}
+
+        if (!pathDeduper.has(dedupeKey)) {
+          pathDeduper.add(dedupeKey);
           result.stickers.push(imgUrl);
           if (onProgress) {
             try { onProgress(imgUrl); } catch (e) {}
@@ -439,8 +599,8 @@ export class StickerScraper {
         }
       }
 
-      result.stickers = result.stickers.slice(0, 50); // Limit top 50
-      console.log(`[Scraper] Found ${result.stickers.length} generic images from ${url}`);
+      result.stickers = result.stickers.slice(0, 150); // Limit top 150
+      log(`Found ${result.stickers.length} generic images from ${url}`);
 
     } catch (e) {
       console.error('[Scraper] Generic extraction error:', e);

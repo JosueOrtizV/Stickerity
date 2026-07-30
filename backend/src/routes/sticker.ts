@@ -52,6 +52,7 @@ export default async function (fastify: FastifyInstance) {
 
       return reply
         .header('Content-Type', preview.mimeType)
+        .header('X-Sticker-Animated', preview.isAnimated ? 'true' : 'false')
         .header('Cache-Control', 'public, max-age=86400')
         .send(preview.buffer);
 
