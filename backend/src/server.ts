@@ -1,5 +1,6 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import dotenv from 'dotenv';
 import extractRoutes from './routes/extract';
 import stickerRoutes from './routes/sticker';
@@ -15,6 +16,13 @@ const server = fastify({
 server.register(cors, {
   origin: true, // Allow all for now, restrict in production
   exposedHeaders: ['X-Sticker-Animated']
+});
+
+// Rate limit: only applied per-route (global: false), not to every endpoint.
+// The /api/sticker proxy must NOT be rate-limited because the frontend
+// makes one request per sticker to render images.
+server.register(rateLimit, {
+  global: false
 });
 
 // Register routes

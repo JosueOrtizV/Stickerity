@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { StickerScraper } from '../services/scraper';
+import { stickerCache } from '../services/cache';
 
 interface ExtractRequestBody {
   url: string;
@@ -8,7 +9,19 @@ interface ExtractRequestBody {
 const scraper = new StickerScraper();
 
 export default async function (fastify: FastifyInstance) {
-  fastify.post<{ Body: ExtractRequestBody }>('/extract', async (request, reply) => {
+  fastify.post<{ Body: ExtractRequestBody }>('/extract', {
+    config: {
+      rateLimit: {
+        max: 15,
+        timeWindow: '10 minutes',
+        errorResponseBuilder: (_request: any, context: any) => ({
+          statusCode: 429,
+          error: 'Too Many Requests',
+          message: `Has superado el límite de extracciones. Por favor intenta de nuevo en ${Math.ceil(context.ttl / 1000 / 60)} minutos.`
+        })
+      }
+    }
+  }, async (request, reply) => {
     const { url } = request.body;
     
     let parsedUrl: URL;
@@ -21,6 +34,8 @@ export default async function (fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'invalid_url', message: 'Por favor ingresa una URL válida (http:// o https://)' });
     }
 
+    const cacheKey = parsedUrl.href;
+
     try {
       fastify.log.info(`Processing extraction request for URL: ${url}`);
 
@@ -32,12 +47,37 @@ export default async function (fastify: FastifyInstance) {
         'Access-Control-Allow-Origin': '*'
       });
 
+      // Check cache first
+      const cachedResult = stickerCache.get(cacheKey);
+      if (cachedResult && cachedResult.length > 0) {
+        fastify.log.info(`Cache HIT for URL: ${url}`);
+        for (const sticker of cachedResult) {
+          reply.raw.write(JSON.stringify({ type: 'sticker', sticker }) + '\n');
+        }
+        reply.raw.write(JSON.stringify({
+          type: 'done',
+          status: 'success',
+          url_processed: url,
+          count: cachedResult.length,
+          cached: true
+        }) + '\n');
+        return reply.raw.end();
+      }
+
+      fastify.log.info(`Cache MISS for URL: ${url}. Running scraper...`);
+
       const result = await scraper.extractStickers(url, (stickerUrl) => {
         try {
           reply.raw.write(JSON.stringify({ type: 'sticker', sticker: stickerUrl }) + '\n');
         } catch (e) {}
       });
       
+      // Save to cache if stickers were found
+      if (result.stickers && result.stickers.length > 0) {
+        stickerCache.set(cacheKey, result.stickers);
+        fastify.log.info(`Saved ${result.stickers.length} stickers to cache for URL: ${url}`);
+      }
+
       reply.raw.write(JSON.stringify({
         type: 'done',
         status: 'success',
