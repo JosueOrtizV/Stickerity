@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  frontend:
+    container_name: stickerity-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+    networks:
+      - web
+
+  backend:
+    container_name: stickerity-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3003:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - web
+
+networks:
+  web:
+    external: true

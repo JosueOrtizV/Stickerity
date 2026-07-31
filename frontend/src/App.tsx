@@ -17,7 +17,13 @@ import ScrollToTop from './components/ScrollToTop';
 import { trackEvent, getDomainFromUrl } from './utils/analytics';
 
 const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
   const hostname = window.location.hostname || 'localhost';
+  if (hostname.includes('stickerity.app')) {
+    return 'https://api.stickerity.app/api';
+  }
   return `http://${hostname}:3000/api`;
 };
 
