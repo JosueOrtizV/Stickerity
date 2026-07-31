@@ -9,3 +9,7 @@ build/
 # Test files & outputs
 backend/*.webp
 backend/*.gif
+
+# Agent tracking files
+Plan.md
+TASKS.md
