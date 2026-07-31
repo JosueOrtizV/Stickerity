@@ -87,7 +87,7 @@ export class StickerScraper {
         const extractUrlsFromObject = (obj: any) => {
           if (!obj) return;
           if (typeof obj === 'string') {
-            const isCdn = obj.includes('ibyteimg.com') || obj.includes('byteimg.com') || obj.includes('tiktokcdn.com');
+            const isCdn = obj.includes('ibyteimg.com') || obj.includes('byteimg.com') || obj.includes('tiktokcdn');
             if (isCdn && (obj.includes('sticker') || obj.includes('.awebp'))) {
               addStickerUrl(obj);
             }
