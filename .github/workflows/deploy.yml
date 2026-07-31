@@ -16,14 +16,10 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            mkdir -p /var/www/Stickerity
             cd /var/www/Stickerity
-            if [ ! -d ".git" ]; then
-              git clone git@github.com:${{ github.repository }}.git .
-            else
-              git fetch origin main || git fetch origin master
-              git reset --hard origin/main || git reset --hard origin/master
-            fi
+            export GIT_SSH_COMMAND="ssh -i /root/.ssh/id_ed25519_stickerity -o StrictHostKeyChecking=no"
+            git fetch origin main || git fetch origin master
+            git reset --hard origin/main || git reset --hard origin/master
             docker compose build
             docker compose up -d
             echo "✅ Stickerity deployed successfully!"
