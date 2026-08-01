@@ -327,6 +327,22 @@ export class StickerScraper {
               consecutiveFailures++;
               log(`Phase 1 pause (${consecutiveFailures}/5 failures). Container: ${scrolledClass.split(' ')[0]}`);
               
+              // Try to close any login modal that might have popped up and blocked the scroll
+              try {
+                await page.keyboard.press('Escape');
+                const closeBtn = page.locator('[data-e2e="modal-close-inner-button"], [data-e2e="login-modal"] button, button[aria-label="Close"], button[aria-label="Cerrar"], [class*="ModalClose"]');
+                if (await closeBtn.count() > 0 && await closeBtn.first().isVisible().catch(() => false)) {
+                  await closeBtn.first().click({ force: true }).catch(() => {});
+                  await page.waitForTimeout(500);
+                }
+                // Fallback: force remove the modal DOM element if close button didn't work
+                await page.evaluate(() => {
+                  const modals = document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]');
+                  modals.forEach(m => m.remove());
+                }).catch(() => {});
+              } catch (e) {}
+
+              
               // Flick the mouse wheel to wake up intersection observer
               if (hoverTarget) await hoverTarget.hover({ timeout: 500 }).catch(() => {});
               await page.mouse.wheel(0, -1000).catch(() => {});
