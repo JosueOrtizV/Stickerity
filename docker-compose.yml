@@ -11,6 +11,17 @@ services:
       - "3002:80"
     networks:
       - web
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev
+      - /var/tmp:noexec,nosuid,nodev
+      - /dev/shm:noexec,nosuid,nodev
+      - /var/cache/nginx
+      - /var/run
 
   backend:
     container_name: stickerity-backend
@@ -25,6 +36,15 @@ services:
       - PORT=3000
     networks:
       - web
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev
+      - /var/tmp:noexec,nosuid,nodev
+      - /dev/shm:noexec,nosuid,nodev
 
 networks:
   web:
