@@ -7,8 +7,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "3002:80"
+    expose:
+      - "80"
     networks:
       - web
     read_only: true
@@ -21,6 +21,12 @@ services:
       - /dev/shm:noexec,nosuid,nodev
       - /var/cache/nginx
       - /var/run
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   backend:
     container_name: stickerity-backend
@@ -28,22 +34,26 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "3003:3000"
+    expose:
+      - "3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
     networks:
       - web
     read_only: true
-    cap_drop:
-      - ALL
     security_opt:
       - no-new-privileges:true
     tmpfs:
       - /tmp:noexec,nosuid,nodev
       - /var/tmp:noexec,nosuid,nodev
       - /dev/shm:noexec,nosuid,nodev
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/', (res) => process.exit(res.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 networks:
   web:
