@@ -12,6 +12,8 @@ services:
     networks:
       - web
     read_only: true
+    cap_drop:
+      - ALL
 
     security_opt:
       - no-new-privileges:true
@@ -42,6 +44,9 @@ services:
     networks:
       - web
     read_only: true
+    user: "1000:1000"
+    cap_drop:
+      - ALL
     security_opt:
       - no-new-privileges:true
     tmpfs:
