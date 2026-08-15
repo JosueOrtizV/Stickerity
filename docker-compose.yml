@@ -14,6 +14,14 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+          pids: 50
+        reservations:
+          memory: 128M
     tmpfs:
       - /tmp:noexec,nosuid,nodev
       - /var/tmp:noexec,nosuid,nodev
@@ -44,6 +52,14 @@ services:
     user: "1000:1000"
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1536M
+          pids: 200
+        reservations:
+          memory: 512M
     tmpfs:
       - /tmp:noexec,nosuid,nodev
       - /var/tmp:noexec,nosuid,nodev
