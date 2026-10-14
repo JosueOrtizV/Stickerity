@@ -9,7 +9,14 @@ build/
 # Test files & outputs
 backend/*.webp
 backend/*.gif
+scratch.*
+backend/scratch.*
+*-dom.json
+backend/*-dom.json
 
 # Agent tracking files
 Plan.md
 TASKS.md
+.vscode/
+.idea/
+

@@ -9,9 +9,9 @@
     "start": "node dist/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["whatsapp", "stickers", "scraper", "converter", "fastify", "playwright"],
+  "author": "Josue Ortiz",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",
