@@ -42,7 +42,7 @@ export class StickerScraper {
 
     const browser = await chromium.launch({
       headless: true,
-      args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-gpu']
+      args: ['--disable-dev-shm-usage', '--no-sandbox']
     });
     let globalTimeout: NodeJS.Timeout | null = null;
 
@@ -117,12 +117,18 @@ export class StickerScraper {
             const isReply = url.includes('/reply');
             
             if (!isReply) {
-              const cursor = json.cursor || 0;
-              if (!seenCursors.has(cursor)) {
-                seenCursors.add(cursor);
-                listPagesLoaded++;
-                listHasMore = json.has_more === 1 || json.has_more === true;
-                log(`Comment page ${listPagesLoaded}: ${json.comments?.length || 0} comments, cursor=${cursor}, has_more=${listHasMore}, total=${json.total || 0}`);
+              const count = json.comments?.length || 0;
+              if (count === 0 && listPagesLoaded > 0) {
+                listHasMore = false;
+                log(`Comment page returned empty (cursor=${json.cursor}), stopping main list pagination`);
+              } else {
+                const cursor = json.cursor || 0;
+                if (!seenCursors.has(cursor)) {
+                  seenCursors.add(cursor);
+                  listPagesLoaded++;
+                  listHasMore = json.has_more === 1 || json.has_more === true;
+                  log(`Comment page ${listPagesLoaded}: ${count} comments, cursor=${cursor}, has_more=${listHasMore}, total=${json.total || 0}`);
+                }
               }
             } else {
               replyApisReceived++;
@@ -253,17 +259,26 @@ export class StickerScraper {
           while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 4) {
             const prevPages = listPagesLoaded;
 
-            // Expand any visible reply buttons natively while scrolling
+            // Expand any visible reply buttons natively while scrolling (target <button> inside DivViewMoreRepliesWrapper)
             await page.evaluate(() => {
               const replyBtns = Array.from(
-                document.querySelectorAll('[class*="DivViewMoreRepliesWrapper"], [data-e2e*="view-more"]')
+                document.querySelectorAll(
+                  '[class*="DivViewMoreRepliesWrapper"] button, [data-e2e*="view-more"] button, [class*="DivViewMoreRepliesWrapper"]'
+                )
               ) as HTMLElement[];
-              for (const btn of replyBtns.slice(0, 10)) {
+              for (const btn of replyBtns.slice(0, 12)) {
                 const txt = (btn.innerText || '').toLowerCase();
-                if (txt.includes('view') || txt.includes('ver') || txt.includes('more') || txt.includes('más')) {
+                if (
+                  txt.includes('view') ||
+                  txt.includes('ver') ||
+                  txt.includes('more') ||
+                  txt.includes('más') ||
+                  txt.includes('repl') ||
+                  txt.includes('respuest')
+                ) {
+                  const innerBtn = btn.querySelector('button, [role="button"]') as HTMLElement | null;
+                  if (innerBtn) innerBtn.click();
                   btn.click();
-                  const child = btn.querySelector('span, p, div') as HTMLElement | null;
-                  if (child) child.click();
                 }
               }
             }).catch(() => {});
@@ -271,6 +286,11 @@ export class StickerScraper {
             // Fast native DOM Scroll targeting DivCommentMain (including DivCommentMainWithoutScroll)
             const scrolledClass = await page.evaluate(() => {
               window.scrollBy(0, 3000);
+
+              const listContainer = document.querySelector('[class*="CommentListContainer"]');
+              if (listContainer && listContainer.lastElementChild) {
+                listContainer.lastElementChild.scrollIntoView({ behavior: 'instant', block: 'end' });
+              }
 
               const allDivs = Array.from(document.querySelectorAll('div'));
               let targetClass = 'none';
@@ -330,6 +350,10 @@ export class StickerScraper {
               await page.waitForTimeout(250);
             } catch (e) {}
 
+            if (!listHasMore) {
+              break;
+            }
+
             if (listPagesLoaded > prevPages) {
               consecutiveFailures = 0;
             } else {
@@ -375,20 +399,27 @@ export class StickerScraper {
 
           log(`Phase 1 complete: ${listPagesLoaded} pages, has_more=${listHasMore}, ${result.stickers.length} stickers so far`);
 
-          // PHASE 2: Expand remaining reply threads natively
+          // PHASE 2: Expand remaining and multi-page reply threads natively
           log(`Phase 2: Expanding reply threads...`);
-          for (let pass = 0; pass < 2; pass++) {
+          for (let pass = 0; pass < 5; pass++) {
             const clickedCount = await page.evaluate(() => {
               const replyBtns = Array.from(
-                document.querySelectorAll('[class*="DivViewMoreRepliesWrapper"], [data-e2e*="view-more"]')
+                document.querySelectorAll(
+                  '[class*="DivViewMoreRepliesWrapper"] button, [data-e2e*="view-more"] button'
+                )
               ) as HTMLElement[];
               let clicked = 0;
-              for (const btn of replyBtns.slice(0, 15)) {
+              for (const btn of replyBtns.slice(0, 20)) {
                 const txt = (btn.innerText || '').toLowerCase();
-                if (txt.includes('view') || txt.includes('ver') || txt.includes('more') || txt.includes('más')) {
+                if (
+                  txt.includes('view') ||
+                  txt.includes('ver') ||
+                  txt.includes('more') ||
+                  txt.includes('más') ||
+                  txt.includes('repl') ||
+                  txt.includes('respuest')
+                ) {
                   btn.click();
-                  const child = btn.querySelector('span, p, div') as HTMLElement | null;
-                  if (child) child.click();
                   clicked++;
                 }
               }
@@ -397,7 +428,7 @@ export class StickerScraper {
 
             if (clickedCount === 0) break;
             log(`Reply pass ${pass + 1}: clicked ${clickedCount} buttons`);
-            await page.waitForTimeout(1200);
+            await page.waitForTimeout(1300);
           }
 
           log(`Phase 2 complete: ${replyApisReceived} reply APIs`);
