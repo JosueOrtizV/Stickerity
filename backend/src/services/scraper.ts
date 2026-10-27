@@ -41,8 +41,7 @@ export class StickerScraper {
     log(`Starting TikTok extraction for ${videoUrl}`);
 
     const browser = await chromium.launch({
-      headless: true,
-      args: ['--disable-dev-shm-usage', '--no-sandbox']
+      headless: true
     });
     let globalTimeout: NodeJS.Timeout | null = null;
 
@@ -64,15 +63,6 @@ export class StickerScraper {
         });
         
         const page = await context.newPage();
-
-        // Block heavy video/audio media streams and fonts to prevent CPU starvation on headless VPS
-        await page.route('**/*', (route) => {
-          const type = route.request().resourceType();
-          if (type === 'media' || type === 'font') {
-            return route.abort();
-          }
-          return route.continue();
-        });
 
         // --- Deduplication ---
         const addedHashes = new Set<string>();
@@ -167,67 +157,19 @@ export class StickerScraper {
           log(`Navigation timeout, proceeding...`);
         });
 
-        // Wait for TikTok React hydration (comment icon or comment list or unavailable message)
-        log(`Waiting for TikTok UI hydration...`);
-        await page.waitForFunction(
-          () => {
-            const hasCommentUi = !!document.querySelector(
-              '[data-e2e="comment-icon"], [data-e2e="browse-comment-icon"], [data-e2e="comment-count"], [data-e2e="comment-list"], [class*="CommentListContainer"]'
-            );
-            const bodyText = document.body?.innerText || '';
-            const isUnavailable =
-              bodyText.includes('Video currently unavailable') ||
-              bodyText.includes('Este video no está disponible') ||
-              bodyText.includes("Couldn't find this account");
-            return hasCommentUi || isUnavailable;
-          },
-          { timeout: 18000 }
-        ).catch(() => {
-          log(`Hydration wait timed out, continuing...`);
-        });
-
-        // Early exit if video does not exist / is unavailable
-        const isVideoUnavailable = await page.evaluate(() => {
-          const t = document.body?.innerText || '';
-          return (
-            t.includes('Video currently unavailable') ||
-            t.includes('Este video no está disponible')
-          ) && !document.querySelector('[data-e2e="comment-icon"], [data-e2e="browse-comment-icon"]');
-        }).catch(() => false);
-
-        if (isVideoUnavailable) {
-          log(`Video is unavailable on TikTok, aborting early.`);
-          return;
-        }
-
-        // Click comments
-        log(`Clicking to load comments...`);
+        // Lightweight 1s poll for comment icon (avoiding page.waitForFunction + body.innerText which causes 60fps layout thrashing!)
+        log(`Polling for comment icon...`);
         try {
-          const isCommentPanelVisible = async () => {
-            return await page.evaluate(() => {
-              const el = document.querySelector(
-                '[class*="CommentListContainer"], [data-e2e="comment-list"], [class*="DivCommentObjectWrapper"], [class*="DivCommentMain"]'
-              ) as HTMLElement | null;
-              return !!(el && el.offsetHeight > 50);
-            }).catch(() => false);
-          };
-
-          const triggerCommentsNative = async () => {
-            if (listPagesLoaded > 0 || (await isCommentPanelVisible())) {
-              return;
+          let clickedComments = false;
+          for (let i = 0; i < 15; i++) {
+            if (listPagesLoaded > 0) {
+              clickedComments = true;
+              break;
             }
+            const state = await page.evaluate(() => {
+              // Remove any blocking login modal
+              document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]').forEach((m) => m.remove());
 
-            // Dismiss any login modal blocking the page using native DOM click/remove
-            await page.evaluate(() => {
-              const closeBtn = document.querySelector(
-                '[data-e2e="modal-close-inner-button"], [id="loginModalContentContainer"] button'
-              ) as HTMLElement | null;
-              if (closeBtn) closeBtn.click();
-              document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]').forEach(m => m.remove());
-            }).catch(() => {});
-
-            // Native DOM click on comment icon/count avoids Playwright actionability hang
-            const clicked = await page.evaluate(() => {
               const targets = [
                 '[data-e2e="browse-comment-icon"]',
                 '[data-e2e="comment-icon"]',
@@ -239,138 +181,78 @@ export class StickerScraper {
                 if (el) {
                   el.click();
                   if (el.parentElement) el.parentElement.click();
-                  return sel;
+                  return 'clicked:' + sel;
                 }
+              }
+              if (document.querySelector('[class*="DivCommentMain"], [class*="CommentListContainer"], [data-e2e="comment-list"]')) {
+                return 'already-open';
               }
               return null;
             }).catch(() => null);
 
-            if (clicked) {
-              log(`Triggered comments via native click on ${clicked}`);
-            } else {
-              await page.keyboard.press('c').catch(() => {});
-              log(`Triggered comments via shortcut 'c'`);
+            if (state) {
+              log(`Comments triggered (${state}) at poll ${i + 1}`);
+              clickedComments = true;
+              break;
             }
-          };
+            await page.waitForTimeout(1000);
+          }
+
+          if (!clickedComments) {
+            await page.keyboard.press('c').catch(() => {});
+            log(`Triggered comments via fallback shortcut 'c'`);
+          }
 
           if (listPagesLoaded === 0) {
-            await triggerCommentsNative();
             await page.waitForResponse(
               (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
-              { timeout: 10000 }
+              { timeout: 6000 }
             ).catch(() => {});
-            await page.waitForTimeout(400);
+            await page.waitForTimeout(600);
           }
 
-          // Cold-start fallback: only click again if comment panel is STILL not visible and 0 pages loaded
-          if (listPagesLoaded === 0 && !(await isCommentPanelVisible())) {
-            log(`Cold start delay detected, retrying comment trigger...`);
-            await triggerCommentsNative();
-            await page.waitForResponse(
-              (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
-              { timeout: 8000 }
-            ).catch(() => {});
-            await page.waitForTimeout(400);
-          }
-
-          // PHASE 1: Load ALL comment pages
-          log(`Phase 1: Loading all comment pages...`);
-          
+          // PHASE 1: Load comment pages + expand visible replies using fast direct selectors (no querySelectorAll('div') reflows)
+          log(`Phase 1: Loading comment pages...`);
           let consecutiveFailures = 0;
           const maxPages = 20;
-          
+
           while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 2) {
             const prevPages = listPagesLoaded;
 
-            // Expand any visible reply buttons natively while scrolling (target <button> inside DivViewMoreRepliesWrapper)
-            await page.evaluate(() => {
-              const replyBtns = Array.from(
-                document.querySelectorAll(
-                  '[class*="DivViewMoreRepliesWrapper"] button, [data-e2e*="view-more"] button, [class*="DivViewMoreRepliesWrapper"]'
-                )
+            const stepInfo = await page.evaluate(() => {
+              // Remove any login modal if present
+              document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]').forEach((m) => m.remove());
+
+              // Click actual <button> inside DivViewMoreRepliesWrapper
+              const btns = Array.from(
+                document.querySelectorAll('[class*="DivViewMoreRepliesWrapper"] button, [data-e2e*="view-more"] button')
               ) as HTMLElement[];
-              for (const btn of replyBtns.slice(0, 12)) {
-                const txt = (btn.innerText || '').toLowerCase();
-                if (
-                  txt.includes('view') ||
-                  txt.includes('ver') ||
-                  txt.includes('more') ||
-                  txt.includes('más') ||
-                  txt.includes('repl') ||
-                  txt.includes('respuest')
-                ) {
-                  const innerBtn = btn.querySelector('button, [role="button"]') as HTMLElement | null;
-                  if (innerBtn) innerBtn.click();
-                  btn.click();
-                }
-              }
-            }).catch(() => {});
+              btns.slice(0, 12).forEach((b) => b.click());
 
-            // Fast native DOM Scroll targeting DivCommentMain (including DivCommentMainWithoutScroll)
-            const scrolledClass = await page.evaluate(() => {
-              window.scrollBy(0, 3000);
-
-              const listContainer = document.querySelector('[class*="CommentListContainer"]');
-              if (listContainer && listContainer.lastElementChild) {
-                listContainer.lastElementChild.scrollIntoView({ behavior: 'instant', block: 'end' });
-              }
-
-              const allDivs = Array.from(document.querySelectorAll('div'));
+              // Direct scroll on DivCommentMain / CommentListContainer
+              const containers = Array.from(
+                document.querySelectorAll('[class*="DivCommentMain"], [class*="CommentListContainer"]')
+              ) as HTMLElement[];
               let targetClass = 'none';
-              // Note: Do NOT blacklist 'WithoutScroll' — TikTok names its main scrollable container DivCommentMainWithoutScroll!
-              const blacklist = /Column|FlexLayout|TabContainer|CountContainer|PlayerContainer|VideoPlayer|ItemContainer/i;
-
-              // Case B1: Priority match for DivCommentMain or CommentListContainer
-              for (let i = 0; i < allDivs.length; i++) {
-                const el = allDivs[i];
-                const cls = el.className?.toString() || '';
-                if (cls.match(/DivCommentMain|CommentListContainer|comment-main|CommentList/i) && !cls.match(blacklist)) {
-                  if (el.scrollHeight > el.clientHeight && el.clientHeight > 100) {
-                    el.scrollTop = el.scrollHeight + 3000;
-                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    targetClass = cls;
-                    break;
-                  }
+              for (const el of containers) {
+                const lastChild = el.lastElementChild as HTMLElement | null;
+                if (lastChild) {
+                  lastChild.scrollIntoView({ behavior: 'instant', block: 'end' });
                 }
+                el.scrollTop = el.scrollHeight + 2500;
+                el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                targetClass = el.className?.toString().split(' ')[0] || 'container';
               }
-
-              // Case C: broad fallback (any scrollable div)
-              if (targetClass === 'none') {
-                for (let i = 0; i < allDivs.length; i++) {
-                  const el = allDivs[i];
-                  const cls = el.className?.toString() || '';
-                  if (!cls.match(blacklist) && el.scrollHeight > el.clientHeight && el.clientHeight > 100 && el.clientHeight < 900) {
-                    el.scrollTop = el.scrollHeight + 3000;
-                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    targetClass = cls || 'unknown-div';
-                    break;
-                  }
-                }
-              }
-
-              // Case D: Force-scroll comment container even if NOT scrollable yet
-              if (targetClass === 'none') {
-                for (let i = 0; i < allDivs.length; i++) {
-                  const el = allDivs[i];
-                  const cls = el.className?.toString() || '';
-                  if (cls.match(/DivCommentMain|CommentListContainer|RightPanel/i) && !cls.match(blacklist) && el.clientHeight > 100) {
-                    el.scrollTop = el.scrollHeight + 3000;
-                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    targetClass = 'force-' + (cls.split(' ')[0] || 'panel');
-                    break;
-                  }
-                }
-              }
-
+              window.scrollBy(0, 2000);
               return targetClass;
-            });
+            }).catch(() => 'error');
 
             try {
               await page.waitForResponse(
                 (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply') && res.status() === 200,
                 { timeout: 2200 }
               );
-              await page.waitForTimeout(200);
+              await page.waitForTimeout(250);
             } catch (e) {}
 
             if (!listHasMore) {
@@ -381,41 +263,7 @@ export class StickerScraper {
               consecutiveFailures = 0;
             } else {
               consecutiveFailures++;
-              log(`Phase 1 pause (${consecutiveFailures}/2 failures). Container: ${scrolledClass.split(' ')[0]}`);
-
-              // Try to close any login modal that might have popped up and blocked the scroll
-              try {
-                await page.evaluate(() => {
-                  const closeBtn = document.querySelector(
-                    '[data-e2e="modal-close-inner-button"], [id="loginModalContentContainer"] button'
-                  ) as HTMLElement | null;
-                  if (closeBtn) closeBtn.click();
-                  const modals = document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]');
-                  modals.forEach(m => m.remove());
-                }).catch(() => {});
-
-                if (listPagesLoaded === 0) {
-                  await triggerCommentsNative();
-                }
-              } catch (e) {}
-
-              // Jiggle scroll on DOM - force-scroll any comment-related container
-              await page.evaluate(() => {
-                const allDivs = Array.from(document.querySelectorAll('div'));
-                const blacklist = /Column|FlexLayout|TabContainer|CountContainer|PlayerContainer|VideoPlayer|ItemContainer/i;
-                for (let i = 0; i < allDivs.length; i++) {
-                  const el = allDivs[i];
-                  const cls = el.className?.toString() || '';
-                  if (cls.match(/DivCommentMain|CommentListContainer|RightPanel/i) && !cls.match(blacklist) && el.clientHeight > 100) {
-                    el.scrollTop = Math.max(0, el.scrollTop - 800);
-                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    setTimeout(() => {
-                      el.scrollTop = el.scrollHeight + 3000;
-                      el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    }, 100);
-                  }
-                }
-              });
+              log(`Phase 1 pause (${consecutiveFailures}/2 failures). Container: ${stepInfo}`);
               await page.waitForTimeout(500);
             }
           }
@@ -426,6 +274,7 @@ export class StickerScraper {
           log(`Phase 2: Expanding reply threads...`);
           for (let pass = 0; pass < 5; pass++) {
             const clickedCount = await page.evaluate(() => {
+              document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]').forEach((m) => m.remove());
               const replyBtns = Array.from(
                 document.querySelectorAll(
                   '[class*="DivViewMoreRepliesWrapper"] button, [data-e2e*="view-more"] button'
@@ -433,25 +282,15 @@ export class StickerScraper {
               ) as HTMLElement[];
               let clicked = 0;
               for (const btn of replyBtns.slice(0, 20)) {
-                const txt = (btn.innerText || '').toLowerCase();
-                if (
-                  txt.includes('view') ||
-                  txt.includes('ver') ||
-                  txt.includes('more') ||
-                  txt.includes('más') ||
-                  txt.includes('repl') ||
-                  txt.includes('respuest')
-                ) {
-                  btn.click();
-                  clicked++;
-                }
+                btn.click();
+                clicked++;
               }
               return clicked;
             }).catch(() => 0);
 
             if (clickedCount === 0) break;
             log(`Reply pass ${pass + 1}: clicked ${clickedCount} buttons`);
-            await page.waitForTimeout(1300);
+            await page.waitForTimeout(1500);
           }
 
           log(`Phase 2 complete: ${replyApisReceived} reply APIs`);
