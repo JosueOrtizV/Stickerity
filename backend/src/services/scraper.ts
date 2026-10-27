@@ -250,32 +250,40 @@ export class StickerScraper {
           let consecutiveFailures = 0;
           const maxPages = 20;
           
-          while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 5) {
+          while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 4) {
             const prevPages = listPagesLoaded;
-            
-            // 1. Mouse Wheel Scroll (safest)
-            // Target DivCommentListContainer, then fall back to RightPanel
-            const hoverTarget = await page.$('[class*="CommentListContainer"], [class*="CommentList"]:not([class*="WithoutScroll"]), [class*="RightPanel"], [data-e2e="comment-list"]');
-            if (hoverTarget) {
-              await hoverTarget.hover({ timeout: 500 }).catch(() => {});
-            }
-            await page.mouse.wheel(0, 3000).catch(() => {});
-            
-            // 2. DOM Scroll Fallback
+
+            // Expand any visible reply buttons natively while scrolling
+            await page.evaluate(() => {
+              const replyBtns = Array.from(
+                document.querySelectorAll('[class*="DivViewMoreRepliesWrapper"], [data-e2e*="view-more"]')
+              ) as HTMLElement[];
+              for (const btn of replyBtns.slice(0, 10)) {
+                const txt = (btn.innerText || '').toLowerCase();
+                if (txt.includes('view') || txt.includes('ver') || txt.includes('more') || txt.includes('más')) {
+                  btn.click();
+                  const child = btn.querySelector('span, p, div') as HTMLElement | null;
+                  if (child) child.click();
+                }
+              }
+            }).catch(() => {});
+
+            // Fast native DOM Scroll targeting DivCommentMain (including DivCommentMainWithoutScroll)
             const scrolledClass = await page.evaluate(() => {
-              window.scrollBy(0, 3000); // Case A: window level scroll
-              
+              window.scrollBy(0, 3000);
+
               const allDivs = Array.from(document.querySelectorAll('div'));
               let targetClass = 'none';
-              const blacklist = /Column|WithoutScroll|FlexLayout|TabContainer|CountContainer|PlayerContainer|VideoPlayer|ItemContainer/i;
-              
-              // Case B1: Exact match for CommentListContainer (the real scroll container)
+              // Note: Do NOT blacklist 'WithoutScroll' — TikTok names its main scrollable container DivCommentMainWithoutScroll!
+              const blacklist = /Column|FlexLayout|TabContainer|CountContainer|PlayerContainer|VideoPlayer|ItemContainer/i;
+
+              // Case B1: Priority match for DivCommentMain or CommentListContainer
               for (let i = 0; i < allDivs.length; i++) {
                 const el = allDivs[i];
                 const cls = el.className?.toString() || '';
-                if (cls.match(/CommentListContainer/i) && !cls.match(blacklist)) {
+                if (cls.match(/DivCommentMain|CommentListContainer|comment-main|CommentList/i) && !cls.match(blacklist)) {
                   if (el.scrollHeight > el.clientHeight && el.clientHeight > 100) {
-                    el.scrollTop += 3000;
+                    el.scrollTop = el.scrollHeight + 3000;
                     el.dispatchEvent(new Event('scroll', { bubbles: true }));
                     targetClass = cls;
                     break;
@@ -283,29 +291,13 @@ export class StickerScraper {
                 }
               }
 
-              // Case B2: broader strict match if B1 didn't trigger
-              if (targetClass === 'none') {
-                for (let i = 0; i < allDivs.length; i++) {
-                  const el = allDivs[i];
-                  const cls = el.className?.toString() || '';
-                  if (cls.match(/CommentMain|comment-main|CommentList|RightPanel/i) && !cls.match(blacklist)) {
-                    if (el.scrollHeight > el.clientHeight && el.clientHeight > 100) {
-                      el.scrollTop += 3000;
-                      el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                      targetClass = cls;
-                      break;
-                    }
-                  }
-                }
-              }
-              
               // Case C: broad fallback (any scrollable div)
               if (targetClass === 'none') {
                 for (let i = 0; i < allDivs.length; i++) {
                   const el = allDivs[i];
                   const cls = el.className?.toString() || '';
                   if (!cls.match(blacklist) && el.scrollHeight > el.clientHeight && el.clientHeight > 100 && el.clientHeight < 900) {
-                    el.scrollTop += 3000;
+                    el.scrollTop = el.scrollHeight + 3000;
                     el.dispatchEvent(new Event('scroll', { bubbles: true }));
                     targetClass = cls || 'unknown-div';
                     break;
@@ -313,15 +305,13 @@ export class StickerScraper {
                 }
               }
 
-              // Case D: Force-scroll RightPanelContainer even if NOT scrollable yet
-              // When comments just loaded (1 page), the list container may fit entirely
-              // but we still need to trigger the IntersectionObserver
+              // Case D: Force-scroll comment container even if NOT scrollable yet
               if (targetClass === 'none') {
                 for (let i = 0; i < allDivs.length; i++) {
                   const el = allDivs[i];
                   const cls = el.className?.toString() || '';
-                  if (cls.match(/CommentListContainer|RightPanel/i) && !cls.match(blacklist) && el.clientHeight > 100) {
-                    el.scrollTop = el.scrollHeight;
+                  if (cls.match(/DivCommentMain|CommentListContainer|RightPanel/i) && !cls.match(blacklist) && el.clientHeight > 100) {
+                    el.scrollTop = el.scrollHeight + 3000;
                     el.dispatchEvent(new Event('scroll', { bubbles: true }));
                     targetClass = 'force-' + (cls.split(' ')[0] || 'panel');
                     break;
@@ -335,17 +325,17 @@ export class StickerScraper {
             try {
               await page.waitForResponse(
                 (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply') && res.status() === 200,
-                { timeout: 5500 }
+                { timeout: 3500 }
               );
-              await page.waitForTimeout(300);
+              await page.waitForTimeout(250);
             } catch (e) {}
 
             if (listPagesLoaded > prevPages) {
               consecutiveFailures = 0;
             } else {
               consecutiveFailures++;
-              log(`Phase 1 pause (${consecutiveFailures}/5 failures). Container: ${scrolledClass.split(' ')[0]}`);
-              
+              log(`Phase 1 pause (${consecutiveFailures}/4 failures). Container: ${scrolledClass.split(' ')[0]}`);
+
               // Try to close any login modal that might have popped up and blocked the scroll
               try {
                 await page.evaluate(() => {
@@ -362,112 +352,52 @@ export class StickerScraper {
                 }
               } catch (e) {}
 
-              
-              // Flick the mouse wheel to wake up intersection observer
-              if (hoverTarget) await hoverTarget.hover({ timeout: 500 }).catch(() => {});
-              await page.mouse.wheel(0, -1000).catch(() => {});
-              await page.waitForTimeout(100);
-              await page.mouse.wheel(0, 4000).catch(() => {});
-              
               // Jiggle scroll on DOM - force-scroll any comment-related container
               await page.evaluate(() => {
                 const allDivs = Array.from(document.querySelectorAll('div'));
-                const blacklist = /Column|WithoutScroll|FlexLayout|TabContainer|CountContainer|PlayerContainer|VideoPlayer|ItemContainer/i;
-                let scrolled = false;
+                const blacklist = /Column|FlexLayout|TabContainer|CountContainer|PlayerContainer|VideoPlayer|ItemContainer/i;
                 for (let i = 0; i < allDivs.length; i++) {
                   const el = allDivs[i];
                   const cls = el.className?.toString() || '';
-                  // Priority: force-scroll any comment container regardless of scrollHeight
-                  if (cls.match(/CommentListContainer|RightPanel/i) && !cls.match(blacklist) && el.clientHeight > 100) {
-                    el.scrollTop = 0;
+                  if (cls.match(/DivCommentMain|CommentListContainer|RightPanel/i) && !cls.match(blacklist) && el.clientHeight > 100) {
+                    el.scrollTop = Math.max(0, el.scrollTop - 800);
                     el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    setTimeout(() => { 
-                      el.scrollTop = el.scrollHeight + 3000; 
+                    setTimeout(() => {
+                      el.scrollTop = el.scrollHeight + 3000;
                       el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                    }, 150);
-                    scrolled = true;
-                  }
-                }
-                // Fallback: try any non-blacklisted scrollable div
-                if (!scrolled) {
-                  for (let i = 0; i < allDivs.length; i++) {
-                    const el = allDivs[i];
-                    const cls = el.className?.toString() || '';
-                    if (!cls.match(blacklist) && el.scrollHeight > el.clientHeight && el.clientHeight > 100 && el.clientHeight < 900) {
-                      el.scrollTop = Math.max(0, el.scrollTop - 1500);
-                      el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                      setTimeout(() => { 
-                        el.scrollTop = el.scrollHeight; 
-                        el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                      }, 150);
-                    }
+                    }, 100);
                   }
                 }
               });
-              await page.waitForTimeout(1500);
+              await page.waitForTimeout(1000);
             }
           }
-          
+
           log(`Phase 1 complete: ${listPagesLoaded} pages, has_more=${listHasMore}, ${result.stickers.length} stickers so far`);
 
-          // PHASE 2: Expand reply threads
+          // PHASE 2: Expand remaining reply threads natively
           log(`Phase 2: Expanding reply threads...`);
-          
-          for (let pass = 0; pass < 3; pass++) {
-            const replyButtons = page.locator('text=/View.*repl|Ver.*respuest/i');
-            const replyCount = await replyButtons.count();
-            
-            if (replyCount === 0) break;
-            
-            log(`Reply pass ${pass + 1}: ${replyCount} buttons`);
-            
-            const maxReplies = Math.min(replyCount, 15);
-            for (let j = 0; j < maxReplies; j++) {
-              try {
-                const btn = replyButtons.nth(j);
-                if (await btn.isVisible({ timeout: 200 })) {
-                  await btn.click({ force: true, timeout: 1000 }).catch(() => {});
-                  try {
-                    await page.waitForResponse(
-                      (res) => res.url().includes('/api/comment/list/reply') && res.status() === 200,
-                      { timeout: 2500 }
-                    );
-                  } catch (e) {}
-                  await page.waitForTimeout(150);
-                }
-              } catch (e) {}
-            }
-            
-            const moreReplies = page.locator('text=/View more|Ver más/i');
-            const moreCount = await moreReplies.count();
-            const maxMore = Math.min(moreCount, 15);
-            for (let j = 0; j < maxMore; j++) {
-              try {
-                const btn = moreReplies.nth(j);
-                if (await btn.isVisible({ timeout: 200 })) {
-                  await btn.click({ force: true, timeout: 1000 }).catch(() => {});
-                  try {
-                    await page.waitForResponse(
-                      (res) => res.url().includes('/api/comment/list/reply') && res.status() === 200,
-                      { timeout: 2500 }
-                    );
-                  } catch (e) {}
-                  await page.waitForTimeout(150);
-                }
-              } catch (e) {}
-            }
-
-            await page.evaluate(() => {
-              const allDivs = Array.from(document.querySelectorAll('div'));
-              for (const el of allDivs) {
-                const cls = el.className?.toString() || '';
-                if ((cls.includes('CommentMain') || cls.includes('comment-main')) && el.scrollHeight > el.clientHeight) {
-                  el.scrollTop += 3000;
-                  return;
+          for (let pass = 0; pass < 2; pass++) {
+            const clickedCount = await page.evaluate(() => {
+              const replyBtns = Array.from(
+                document.querySelectorAll('[class*="DivViewMoreRepliesWrapper"], [data-e2e*="view-more"]')
+              ) as HTMLElement[];
+              let clicked = 0;
+              for (const btn of replyBtns.slice(0, 15)) {
+                const txt = (btn.innerText || '').toLowerCase();
+                if (txt.includes('view') || txt.includes('ver') || txt.includes('more') || txt.includes('más')) {
+                  btn.click();
+                  const child = btn.querySelector('span, p, div') as HTMLElement | null;
+                  if (child) child.click();
+                  clicked++;
                 }
               }
-            });
-            await page.waitForTimeout(400);
+              return clicked;
+            }).catch(() => 0);
+
+            if (clickedCount === 0) break;
+            log(`Reply pass ${pass + 1}: clicked ${clickedCount} buttons`);
+            await page.waitForTimeout(1200);
           }
 
           log(`Phase 2 complete: ${replyApisReceived} reply APIs`);
