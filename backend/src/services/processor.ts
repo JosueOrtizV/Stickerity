@@ -113,34 +113,65 @@ export class ImageProcessor {
     }
 
     // 2. Perform resize to 512x512 while keeping aspect ratio and transparent padding (WEBP Flow)
-    const sharpInstance = sharp(inputBuffer, { animated: true })
-      .resize(512, 512, {
-        fit: 'contain',
-        background: { r: 0, g: 0, b: 0, alpha: 0 }
-      })
-      .webp({
-        quality,
-        effort: 4,
-        loop: 0 // Infinite loop for WhatsApp stickers
-      });
+    // For static images, check if the image is completely opaque; if so, use 510x510 + 1px transparent
+    // border so libwebp always emits VP8X (alpha: true) + ALPH chunk required by WhatsApp Stickers.
+    let needsAlphaBorder = false;
+    if (!isAnimated) {
+      if (!metadata.hasAlpha) {
+        needsAlphaBorder = true;
+      } else {
+        const rawPixels = await sharp(inputBuffer).ensureAlpha().raw().toBuffer();
+        let hasTransparentPixel = false;
+        for (let i = 3; i < rawPixels.length; i += 4) {
+          if (rawPixels[i] < 255) {
+            hasTransparentPixel = true;
+            break;
+          }
+        }
+        if (!hasTransparentPixel) {
+          needsAlphaBorder = true;
+        }
+      }
+    }
 
-    processedBuffer = await sharpInstance.toBuffer();
-
-    // 3. Size check: If larger than 500KB (WhatsApp limit), reduce quality iteratively
-    const MAX_SIZE_BYTES = 490 * 1024; // 490 KB safety threshold
-    while (processedBuffer.length > MAX_SIZE_BYTES && quality > 20) {
-      quality -= 15;
-      processedBuffer = await sharp(inputBuffer, { animated: true })
-        .resize(512, 512, {
+    const buildWebpBuffer = async (q: number): Promise<Buffer> => {
+      let pipeline = sharp(inputBuffer, { animated: isAnimated }).ensureAlpha();
+      if (!isAnimated && needsAlphaBorder) {
+        pipeline = pipeline
+          .resize(510, 510, {
+            fit: 'contain',
+            background: { r: 0, g: 0, b: 0, alpha: 0 }
+          })
+          .extend({
+            top: 1,
+            bottom: 1,
+            left: 1,
+            right: 1,
+            background: { r: 0, g: 0, b: 0, alpha: 0 }
+          });
+      } else {
+        pipeline = pipeline.resize(512, 512, {
           fit: 'contain',
           background: { r: 0, g: 0, b: 0, alpha: 0 }
-        })
+        });
+      }
+      return pipeline
         .webp({
-          quality,
+          quality: q,
+          alphaQuality: 100,
           effort: 4,
-          loop: 0
+          loop: 0 // Infinite loop for WhatsApp stickers
         })
         .toBuffer();
+    };
+
+    processedBuffer = await buildWebpBuffer(quality);
+
+    // 3. Size check: WhatsApp requires < 100KB for static stickers and < 500KB for animated stickers
+    const MAX_SIZE_BYTES = isAnimated ? 490 * 1024 : 95 * 1024;
+    while (processedBuffer.length > MAX_SIZE_BYTES && quality > 15) {
+      quality -= 15;
+      processedBuffer = await buildWebpBuffer(quality);
     }
 
     // 4. Inject WhatsApp EXIF Metadata so WhatsApp natively treats it as a Sticker
@@ -161,21 +192,29 @@ export class ImageProcessor {
   }
 
   /**
-   * Injects WhatsApp sticker EXIF metadata into WebP buffer
+   * Injects WhatsApp sticker EXIF metadata into WebP buffer matching native STK-*.webp format
    */
   private async addExifMetadata(webpBuffer: Buffer): Promise<Buffer> {
     const img = new webp.Image();
     await img.load(webpBuffer);
 
     const json = {
-      'sticker-pack-id': 'Stickerity',
+      'sticker-pack-id': 'com.stickerity.app.stickercontentprovider 1',
       'sticker-pack-name': 'Stickerity',
-      'sticker-pack-publisher': 'Stickerity'
+      'sticker-pack-publisher': 'Stickerity',
+      'android-app-store-link': 'https://stickerity.app',
+      'ios-app-store-link': 'https://stickerity.app'
     };
 
     const jsonBuff = Buffer.from(JSON.stringify(json), 'utf-8');
+    // Native WhatsApp WebP EXIF chunk starts directly with the Little-Endian TIFF header (II*\0),
+    // WITHOUT the 6-byte JPEG "Exif\0\0" prefix, and uses offset 0x16 (22 bytes) to the JSON payload.
     const exifHeader = Buffer.from([
-      0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00
+      0x49, 0x49, 0x2a, 0x00, // TIFF Little-Endian header ("II*\0")
+      0x08, 0x00, 0x00, 0x00, // Offset to first IFD (8 bytes)
+      0x01, 0x00,             // 1 IFD entry
+      0x41, 0x57,             // Tag ID 0x5741 ("WA" in little-endian)
+      0x07, 0x00              // Tag Type 7 (UNDEFINED)
     ]);
     const lengthBuff = Buffer.from([
       jsonBuff.length & 0xff,
@@ -183,11 +222,25 @@ export class ImageProcessor {
       (jsonBuff.length >> 16) & 0xff,
       (jsonBuff.length >> 24) & 0xff
     ]);
-    const zeroBuff = Buffer.from([0x00, 0x00, 0x00, 0x00]);
+    // 22 bytes (0x16) from start of TIFF header to start of JSON payload
+    const offsetBuff = Buffer.from([0x16, 0x00, 0x00, 0x00]);
 
-    const exif = Buffer.concat([exifHeader, lengthBuff, zeroBuff, jsonBuff]);
+    const exif = Buffer.concat([exifHeader, lengthBuff, offsetBuff, jsonBuff]);
     img.exif = exif;
 
-    return await img.save(null);
+    const savedBuffer = await img.save(null);
+
+    // Fix node-webpmux bug where saving animated WebP clears the Alpha flag (0x10) in VP8X
+    if (
+      webpBuffer.length > 20 &&
+      savedBuffer.length > 20 &&
+      webpBuffer.slice(12, 16).toString('ascii') === 'VP8X' &&
+      savedBuffer.slice(12, 16).toString('ascii') === 'VP8X'
+    ) {
+      const originalAlphaFlag = webpBuffer[20] & 0x10;
+      savedBuffer[20] = savedBuffer[20] | originalAlphaFlag;
+    }
+
+    return savedBuffer;
   }
 }
