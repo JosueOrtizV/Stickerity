@@ -157,18 +157,26 @@ export class StickerScraper {
           log(`Navigation timeout, proceeding...`);
         });
 
-        // Lightweight 1s poll for comment icon (avoiding page.waitForFunction + body.innerText which causes 60fps layout thrashing!)
-        log(`Polling for comment icon...`);
+        // Lightweight poll that clicks comment-icon until the comment drawer actually opens in the DOM
+        // (SSR renders [data-e2e="comment-icon"] before React attaches the click handler, so a single early click can be ignored)
+        log(`Polling for comment icon and drawer...`);
         try {
-          let clickedComments = false;
-          for (let i = 0; i < 15; i++) {
+          let drawerOpened = false;
+          for (let i = 0; i < 18; i++) {
             if (listPagesLoaded > 0) {
-              clickedComments = true;
+              drawerOpened = true;
               break;
             }
             const state = await page.evaluate(() => {
               // Remove any blocking login modal
               document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]').forEach((m) => m.remove());
+
+              const panel = document.querySelector(
+                '[class*="DivCommentListContainer"], [class*="CommentListContainer"], [class*="DivCommentMain"], [data-e2e="comment-list"]'
+              ) as HTMLElement | null;
+              if (panel && panel.offsetHeight > 50) {
+                return 'drawer-open';
+              }
 
               const targets = [
                 '[data-e2e="browse-comment-icon"]',
@@ -184,21 +192,21 @@ export class StickerScraper {
                   return 'clicked:' + sel;
                 }
               }
-              if (document.querySelector('[class*="DivCommentMain"], [class*="CommentListContainer"], [data-e2e="comment-list"]')) {
-                return 'already-open';
-              }
               return null;
             }).catch(() => null);
 
-            if (state) {
-              log(`Comments triggered (${state}) at poll ${i + 1}`);
-              clickedComments = true;
+            if (state === 'drawer-open') {
+              log(`Comment drawer confirmed open at poll ${i + 1}`);
+              drawerOpened = true;
               break;
             }
-            await page.waitForTimeout(1000);
+            if (state && state.startsWith('clicked:') && (i === 0 || i % 3 === 0)) {
+              log(`Comments triggered (${state}) at poll ${i + 1}, waiting for drawer...`);
+            }
+            await page.waitForTimeout(1200);
           }
 
-          if (!clickedComments) {
+          if (!drawerOpened && listPagesLoaded === 0) {
             await page.keyboard.press('c').catch(() => {});
             log(`Triggered comments via fallback shortcut 'c'`);
           }
@@ -206,7 +214,7 @@ export class StickerScraper {
           if (listPagesLoaded === 0) {
             await page.waitForResponse(
               (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
-              { timeout: 6000 }
+              { timeout: 7000 }
             ).catch(() => {});
             await page.waitForTimeout(600);
           }
