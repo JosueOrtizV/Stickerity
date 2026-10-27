@@ -40,15 +40,18 @@ export class StickerScraper {
 
     log(`Starting TikTok extraction for ${videoUrl}`);
 
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+      headless: true,
+      args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-gpu']
+    });
     let globalTimeout: NodeJS.Timeout | null = null;
 
     try {
-      // 55-second global safety timeout
+      // 65-second global safety timeout
       const timeoutPromise = new Promise<void>((_, reject) => {
         globalTimeout = setTimeout(() => {
-          reject(new Error('Global extraction timeout (55s) reached'));
-        }, 55000);
+          reject(new Error('Global extraction timeout (65s) reached'));
+        }, 65000);
       });
 
       const extractionPromise = (async () => {
@@ -134,95 +137,111 @@ export class StickerScraper {
         await page.goto(videoUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {
           log(`Navigation timeout, proceeding...`);
         });
-        await page.waitForTimeout(2000);
 
-        // Dismiss popups
-        try {
-          await page.keyboard.press('Escape');
-          await page.waitForTimeout(300);
-          await page.keyboard.press('Escape');
-          
-          const closeButtons = page.locator('button[aria-label="Close"], [class*="ButtonClose"], [class*="close-icon"]');
-          const count = await closeButtons.count();
-          for (let i = 0; i < count; i++) {
-            if (await closeButtons.nth(i).isVisible()) {
-              await closeButtons.nth(i).click().catch(() => {});
-            }
-          }
-        } catch (e) {}
+        // Wait for TikTok React hydration (comment icon or comment list or unavailable message)
+        log(`Waiting for TikTok UI hydration...`);
+        await page.waitForFunction(
+          () => {
+            const hasCommentUi = !!document.querySelector(
+              '[data-e2e="comment-icon"], [data-e2e="browse-comment-icon"], [data-e2e="comment-count"], [data-e2e="comment-list"], [class*="CommentListContainer"]'
+            );
+            const bodyText = document.body?.innerText || '';
+            const isUnavailable =
+              bodyText.includes('Video currently unavailable') ||
+              bodyText.includes('Este video no está disponible') ||
+              bodyText.includes("Couldn't find this account");
+            return hasCommentUi || isUnavailable;
+          },
+          { timeout: 18000 }
+        ).catch(() => {
+          log(`Hydration wait timed out, continuing...`);
+        });
+
+        // Early exit if video does not exist / is unavailable
+        const isVideoUnavailable = await page.evaluate(() => {
+          const t = document.body?.innerText || '';
+          return (
+            t.includes('Video currently unavailable') ||
+            t.includes('Este video no está disponible')
+          ) && !document.querySelector('[data-e2e="comment-icon"], [data-e2e="browse-comment-icon"]');
+        }).catch(() => false);
+
+        if (isVideoUnavailable) {
+          log(`Video is unavailable on TikTok, aborting early.`);
+          return;
+        }
 
         // Click comments
         log(`Clicking to load comments...`);
         try {
           const isCommentPanelVisible = async () => {
-            const panel = page.locator('[class*="CommentListContainer"], [data-e2e="comment-list"], [class*="DivCommentObjectWrapper"]').first();
-            return await panel.isVisible().catch(() => false);
+            return await page.evaluate(() => {
+              const el = document.querySelector(
+                '[class*="CommentListContainer"], [data-e2e="comment-list"], [class*="DivCommentObjectWrapper"], [class*="DivCommentMain"]'
+              ) as HTMLElement | null;
+              return !!(el && el.offsetHeight > 50);
+            }).catch(() => false);
           };
 
-          const tryClickComments = async () => {
-            // If the comment panel is ALREADY visible in the DOM, do not click again (avoid toggling it off!)
-            if (await isCommentPanelVisible()) {
+          const triggerCommentsNative = async () => {
+            if (listPagesLoaded > 0 || (await isCommentPanelVisible())) {
               return;
             }
 
-            // Dismiss any TikTok login/cookie modals safely without using Escape
-            const modalCloseBtn = page.locator('[data-e2e="modal-close-inner-button"], [class*="ModalClose"], [class*="CloseButton"]').first();
-            if (await modalCloseBtn.isVisible().catch(() => false)) {
-              await modalCloseBtn.click({ force: true }).catch(() => {});
-              await page.waitForTimeout(300);
-            }
+            // Dismiss any login modal blocking the page using native DOM click/remove
+            await page.evaluate(() => {
+              const closeBtn = document.querySelector(
+                '[data-e2e="modal-close-inner-button"], [id="loginModalContentContainer"] button'
+              ) as HTMLElement | null;
+              if (closeBtn) closeBtn.click();
+              document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]').forEach(m => m.remove());
+            }).catch(() => {});
 
-            const commentIcon = page.locator('button[data-e2e="browse-comment-icon"], [data-e2e="comment-icon"], [class*="CommentIcon"]').first();
-            const commentsTextTab = page.locator('text="Comments"').or(page.locator('text="Comentarios"')).first();
-            const commentCount = page.locator('[class*="CommentCount"], [data-e2e="comment-count"]').first();
+            // Native DOM click on comment icon/count avoids Playwright actionability hang
+            const clicked = await page.evaluate(() => {
+              const targets = [
+                '[data-e2e="browse-comment-icon"]',
+                '[data-e2e="comment-icon"]',
+                '[data-e2e="comment-count"]',
+                '[class*="CommentIcon"]'
+              ];
+              for (const sel of targets) {
+                const el = document.querySelector(sel) as HTMLElement | null;
+                if (el) {
+                  el.click();
+                  if (el.parentElement) el.parentElement.click();
+                  return sel;
+                }
+              }
+              return null;
+            }).catch(() => null);
 
-            if (await commentIcon.isVisible().catch(() => false)) {
-              await commentIcon.click({ force: true }).catch(() => {});
-            } else if (await commentsTextTab.isVisible().catch(() => false)) {
-              await commentsTextTab.click({ force: true }).catch(() => {});
-            } else if (await commentCount.isVisible().catch(() => false)) {
-              await commentCount.click({ force: true }).catch(() => {});
+            if (clicked) {
+              log(`Triggered comments via native click on ${clicked}`);
             } else {
-              // TikTok shortcut key 'c' opens/toggles comment panel
               await page.keyboard.press('c').catch(() => {});
+              log(`Triggered comments via shortcut 'c'`);
             }
           };
 
-          await tryClickComments();
-
-          await page.waitForResponse(
-            (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
-            { timeout: 3500 }
-          ).catch(() => {});
-          await page.waitForTimeout(300);
-
-          // Cold-start fallback 1: If no comment API was triggered yet, retry clicking
           if (listPagesLoaded === 0) {
-            log(`Cold start delay detected, retrying comment trigger...`);
-            await tryClickComments();
+            await triggerCommentsNative();
             await page.waitForResponse(
               (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
-              { timeout: 5000 }
+              { timeout: 10000 }
             ).catch(() => {});
-            await page.waitForTimeout(300);
+            await page.waitForTimeout(400);
           }
 
-          // Cold-start fallback 2: If still no comment API triggered, try shortcut 'c' & direct comment count click
-          if (listPagesLoaded === 0) {
-            log(`Second cold start retry, attempting direct clicks...`);
-            if (!(await isCommentPanelVisible())) {
-              await page.keyboard.press('c').catch(() => {});
-              await page.waitForTimeout(300);
-              const commentCount = page.locator('[class*="CommentCount"], [data-e2e="comment-count"]').first();
-              if (await commentCount.isVisible().catch(() => false)) {
-                await commentCount.click({ force: true }).catch(() => {});
-              }
-            }
+          // Cold-start fallback: only click again if comment panel is STILL not visible and 0 pages loaded
+          if (listPagesLoaded === 0 && !(await isCommentPanelVisible())) {
+            log(`Cold start delay detected, retrying comment trigger...`);
+            await triggerCommentsNative();
             await page.waitForResponse(
               (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply'),
-              { timeout: 6000 }
+              { timeout: 8000 }
             ).catch(() => {});
-            await page.waitForTimeout(300);
+            await page.waitForTimeout(400);
           }
 
           // PHASE 1: Load ALL comment pages
@@ -329,17 +348,18 @@ export class StickerScraper {
               
               // Try to close any login modal that might have popped up and blocked the scroll
               try {
-                await page.keyboard.press('Escape');
-                const closeBtn = page.locator('[data-e2e="modal-close-inner-button"], [data-e2e="login-modal"] button, button[aria-label="Close"], button[aria-label="Cerrar"], [class*="ModalClose"]');
-                if (await closeBtn.count() > 0 && await closeBtn.first().isVisible().catch(() => false)) {
-                  await closeBtn.first().click({ force: true }).catch(() => {});
-                  await page.waitForTimeout(500);
-                }
-                // Fallback: force remove the modal DOM element if close button didn't work
                 await page.evaluate(() => {
+                  const closeBtn = document.querySelector(
+                    '[data-e2e="modal-close-inner-button"], [id="loginModalContentContainer"] button'
+                  ) as HTMLElement | null;
+                  if (closeBtn) closeBtn.click();
                   const modals = document.querySelectorAll('[data-e2e="login-modal"], [id="loginModalContentContainer"]');
                   modals.forEach(m => m.remove());
                 }).catch(() => {});
+
+                if (listPagesLoaded === 0) {
+                  await triggerCommentsNative();
+                }
               } catch (e) {}
 
               
@@ -406,7 +426,7 @@ export class StickerScraper {
               try {
                 const btn = replyButtons.nth(j);
                 if (await btn.isVisible({ timeout: 200 })) {
-                  await btn.click({ force: true }).catch(() => {});
+                  await btn.click({ force: true, timeout: 1000 }).catch(() => {});
                   try {
                     await page.waitForResponse(
                       (res) => res.url().includes('/api/comment/list/reply') && res.status() === 200,
@@ -425,7 +445,7 @@ export class StickerScraper {
               try {
                 const btn = moreReplies.nth(j);
                 if (await btn.isVisible({ timeout: 200 })) {
-                  await btn.click({ force: true }).catch(() => {});
+                  await btn.click({ force: true, timeout: 1000 }).catch(() => {});
                   try {
                     await page.waitForResponse(
                       (res) => res.url().includes('/api/comment/list/reply') && res.status() === 200,
@@ -467,7 +487,7 @@ export class StickerScraper {
             // Priority 2: Generic image scan fallback
             document.querySelectorAll('img').forEach((el) => {
               const src = el.src || el.getAttribute('data-src') || '';
-              if ((src.includes('ibyteimg.com') || src.includes('byteimg.com')) && (src.includes('sticker') || src.includes('.awebp'))) {
+              if ((src.includes('ibyteimg.com') || src.includes('byteimg.com') || src.includes('tiktokcdn')) && (src.includes('sticker') || src.includes('.awebp'))) {
                 if (!found.includes(src)) found.push(src);
               }
             });

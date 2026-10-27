@@ -46,6 +46,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - HOME=/tmp
     networks:
       - web
     read_only: true
@@ -57,13 +58,13 @@ services:
         limits:
           cpus: '2.0'
           memory: 1536M
-          pids: 200
+          pids: 500
         reservations:
           memory: 512M
     tmpfs:
-      - /tmp:noexec,nosuid,nodev
-      - /var/tmp:noexec,nosuid,nodev
-      - /dev/shm:noexec,nosuid,nodev
+      - /tmp:size=512m,noexec,nosuid,nodev
+      - /var/tmp:size=128m,noexec,nosuid,nodev
+      - /dev/shm:size=512m,noexec,nosuid,nodev
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/', (res) => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""]
       interval: 15s
