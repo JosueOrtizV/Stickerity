@@ -65,6 +65,15 @@ export class StickerScraper {
         
         const page = await context.newPage();
 
+        // Block heavy video/audio media streams and fonts to prevent CPU starvation on headless VPS
+        await page.route('**/*', (route) => {
+          const type = route.request().resourceType();
+          if (type === 'media' || type === 'font') {
+            return route.abort();
+          }
+          return route.continue();
+        });
+
         // --- Deduplication ---
         const addedHashes = new Set<string>();
         const addStickerUrl = (rawUrl: string) => {
@@ -112,9 +121,18 @@ export class StickerScraper {
           const url = response.url();
           if (!url.includes('/api/comment/')) return;
           
+          const isReply = url.includes('/reply');
           try {
-            const json = await response.json();
-            const isReply = url.includes('/reply');
+            const text = await response.text();
+            if (!text || text.trim().length === 0) {
+              if (!isReply && listPagesLoaded > 0) {
+                listHasMore = false;
+                log(`Comment page returned empty body, stopping main list pagination`);
+              }
+              return;
+            }
+
+            const json = JSON.parse(text);
             
             if (!isReply) {
               const count = json.comments?.length || 0;
@@ -135,7 +153,12 @@ export class StickerScraper {
             }
             
             extractUrlsFromObject(json);
-          } catch (e) {}
+          } catch (e) {
+            if (!isReply && listPagesLoaded > 0) {
+              listHasMore = false;
+              log(`Comment page returned non-JSON response, stopping main list pagination`);
+            }
+          }
         });
 
         // Navigate
@@ -256,7 +279,7 @@ export class StickerScraper {
           let consecutiveFailures = 0;
           const maxPages = 20;
           
-          while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 4) {
+          while (listHasMore && listPagesLoaded < maxPages && consecutiveFailures < 2) {
             const prevPages = listPagesLoaded;
 
             // Expand any visible reply buttons natively while scrolling (target <button> inside DivViewMoreRepliesWrapper)
@@ -345,9 +368,9 @@ export class StickerScraper {
             try {
               await page.waitForResponse(
                 (res) => res.url().includes('/api/comment/list') && !res.url().includes('/reply') && res.status() === 200,
-                { timeout: 3500 }
+                { timeout: 2200 }
               );
-              await page.waitForTimeout(250);
+              await page.waitForTimeout(200);
             } catch (e) {}
 
             if (!listHasMore) {
@@ -358,7 +381,7 @@ export class StickerScraper {
               consecutiveFailures = 0;
             } else {
               consecutiveFailures++;
-              log(`Phase 1 pause (${consecutiveFailures}/4 failures). Container: ${scrolledClass.split(' ')[0]}`);
+              log(`Phase 1 pause (${consecutiveFailures}/2 failures). Container: ${scrolledClass.split(' ')[0]}`);
 
               // Try to close any login modal that might have popped up and blocked the scroll
               try {
@@ -393,7 +416,7 @@ export class StickerScraper {
                   }
                 }
               });
-              await page.waitForTimeout(1000);
+              await page.waitForTimeout(500);
             }
           }
 
